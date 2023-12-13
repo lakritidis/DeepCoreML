@@ -5,7 +5,7 @@ class ResultHandler:
     def __init__(self, results):
         self.r_ = results
 
-    def to_df(self):
+    def to_df(self, columns='all'):
         df_columns = [
             'Classifier',
             'Sampler',
@@ -22,14 +22,11 @@ class ResultHandler:
             'Order'
         ]
 
-        return pd.DataFrame(self.r_, columns=df_columns)
+        df = pd.DataFrame(self.r_, columns=df_columns)
+        return df[columns]
 
     def to_latex(self, columns='all'):
-        df_temp = self.to_df()
-
-        if columns == 'all':
-            latex_code = df_temp.to_latex()
-        else:
-            latex_code = df_temp[columns].to_latex()
+        df_temp = self.to_df(columns)
+        latex_code = df_temp.to_latex()
 
         return latex_code

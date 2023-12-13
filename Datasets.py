@@ -77,7 +77,10 @@ class BaseDataset:
     def load_from_csv(self, path='', feature_cols=range(0, 1), class_col=1):
         """
         Load a dataset from a CSV file
-        :return:
+        Args:
+            path: The location of the input CSV file.
+            feature_cols: A tuple the denotes the indices of the columns with the input variables.
+            class_col: The integer index of the column that stores the target variables.
         """
         self.feature_columns_ = feature_cols
         self.class_column_ = class_col
@@ -89,14 +92,19 @@ class BaseDataset:
         else:
             self.df_ = self.get_df(path)
 
+        # Shuffle the dataframe
+        self.df_.sample(frac=1)
+
+        # Convert x and y to NumPy arrays
         self.x_ = self.df_.iloc[:, feature_cols].to_numpy()
         self.y_ = self.df_.iloc[:, class_col].to_numpy()
 
+        # Label encode the target variables
         class_encoder = LabelEncoder()
         self.y_ = class_encoder.fit_transform(self.y_)
 
+        # Useful quick reference statistics
         self.num_classes_ = len(self.df_.iloc[:, class_col].unique())
-
         self.num_samples_ = self.x_.shape[0]
         self.dimensionality_ = self.x_.shape[1]
 
@@ -138,9 +146,9 @@ class BaseDataset:
         scorers = {
             'accuracy_score': make_scorer(accuracy_score),
             'balanced_accuracy_score': make_scorer(balanced_accuracy_score),
-            'sensitivity_score': make_scorer(sensitivity_score, average='micro'),
-            'specificity_score': make_scorer(specificity_score, average='micro'),
-            'f1_score': make_scorer(f1_score, average='micro')
+            'sensitivity_score': make_scorer(sensitivity_score, average='weighted'),
+            'specificity_score': make_scorer(specificity_score, average='weighted'),
+            'f1_score': make_scorer(f1_score, average='weighted')
         }
 
         # cross_validate uses Stratified kFold when cv is int
