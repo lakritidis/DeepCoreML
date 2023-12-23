@@ -35,7 +35,7 @@ class Classifiers:
                            RandomForestClassifier(n_estimators=50, criterion='gini', max_depth=None,
                                                   max_features='sqrt', n_jobs=1, random_state=random_state)),
             BaseClassifier("Multilayer Perceptron", "MLP",
-                           MLPClassifier(activation='relu', hidden_layer_sizes=(8, 4), solver='adam', max_iter=300,
+                           MLPClassifier(activation='relu', hidden_layer_sizes=(128, 128), solver='adam', max_iter=300,
                                          random_state=random_state))
         )
         self.num_classifiers_ = len(self.models_)

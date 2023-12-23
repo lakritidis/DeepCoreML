@@ -15,16 +15,16 @@ class BaseGenerator:
         random_state: An integer for seeding the involved random number generators.
     """
     def __init__(self, epochs, batch_size, random_state):
-        self.input_dim_ = 0                     # Input data dimensionality
-        self.n_classes_ = 0                     # Number of classes in the input dataset
-        self.random_state_ = random_state       # An integer to seed the random number generators
+        self._input_dim = 0                     # Input data dimensionality
+        self._n_classes = 0                     # Number of classes in the input dataset
+        self._random_state = random_state       # An integer to seed the random number generators
         self.gen_samples_ratio_ = None          # Array [number of samples to generate per class]
-        self.x_train_per_class_ = None          # Array [ [x_train_per_class] ]
+        self._samples_per_class = None          # Array [ [x_train_per_class] ]
 
         self._epochs = epochs                   # Number of training epochs
         self._batch_size = batch_size           # Number of data instances per training batch
 
-        self.device_ = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class BaseGAN(BaseGenerator):
@@ -99,20 +99,20 @@ class BaseGAN(BaseGenerator):
         train_data = np.concatenate((x_train, y_train), axis=1)
         training_data = torch.from_numpy(train_data).to(torch.float32)
 
-        self.input_dim_ = x_train.shape[1]
-        self.n_classes_ = y_train.shape[1]
+        self._input_dim = x_train.shape[1]
+        self._n_classes = y_train.shape[1]
 
         # Determine how to sample the conditional GAN in smart training
-        self.gen_samples_ratio_ = [int(sum(y_train[:, c])) for c in range(self.n_classes_)]
+        self.gen_samples_ratio_ = [int(sum(y_train[:, c])) for c in range(self._n_classes)]
         # gen_samples_ratio.reverse()
 
         # Class specific training data for smart training (KL/JS divergence)
-        self.x_train_per_class_ = []
-        for y in range(self.n_classes_):
+        self._samples_per_class = []
+        for y in range(self._n_classes):
             x_class_data = np.array([x_train[r, :] for r in range(y_train.shape[0]) if y_train[r, y] == 1])
-            x_class_data = torch.from_numpy(x_class_data).to(torch.float32).to(self.device_)
+            x_class_data = torch.from_numpy(x_class_data).to(torch.float32).to(self._device)
 
-            self.x_train_per_class_.append(x_class_data)
+            self._samples_per_class.append(x_class_data)
 
         return training_data
 
@@ -128,15 +128,15 @@ class BaseGAN(BaseGenerator):
             Artificial data instances created by the Generator.
         """
         if y is None:
-            latent_classes = torch.from_numpy(np.random.randint(0, self.n_classes_, num_samples)).to(torch.int64)
-            latent_y = nn.functional.one_hot(latent_classes, num_classes=self.n_classes_)
+            latent_classes = torch.from_numpy(np.random.randint(0, self._n_classes, num_samples)).to(torch.int64)
+            latent_y = nn.functional.one_hot(latent_classes, num_classes=self._n_classes)
         else:
-            latent_y = nn.functional.one_hot(torch.full(size=(num_samples,), fill_value=y), num_classes=self.n_classes_)
+            latent_y = nn.functional.one_hot(torch.full(size=(num_samples,), fill_value=y), num_classes=self._n_classes)
 
         latent_x = torch.randn((num_samples, self.embedding_dim_))
 
         # concatenate, copy to device, and pass to generator
-        latent_data = torch.cat((latent_x, latent_y), dim=1).to(self.device_)
+        latent_data = torch.cat((latent_x, latent_y), dim=1).to(self._device)
 
         # Generate data from the model's Generator - The feature values of the generated samples fall into the range:
         # [-1,1]: if the activation function of the output layer of the Generator is nn.Tanh().
@@ -149,7 +149,7 @@ class BaseGAN(BaseGenerator):
         return reconstructed_samples
 
     def base_fit_resample(self, x_train, y_train):
-        generated_data = [None for _ in range(self.n_classes_)]
+        generated_data = [None for _ in range(self._n_classes)]
 
         majority_class = np.array(self.gen_samples_ratio_).argmax()
         num_majority_samples = np.max(np.array(self.gen_samples_ratio_))
@@ -157,7 +157,7 @@ class BaseGAN(BaseGenerator):
         x_over_train = np.copy(x_train)
         y_over_train = np.copy(y_train)
 
-        for cls in range(self.n_classes_):
+        for cls in range(self._n_classes):
             if cls != majority_class:
                 samples_to_generate = num_majority_samples - self.gen_samples_ratio_[cls]
 

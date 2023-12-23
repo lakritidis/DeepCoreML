@@ -31,7 +31,7 @@ class BaseDataset:
 
         :param random_state: controls random number generation. Set this to a fixed integer to get reproducible results.
         """
-        self.seed_ = random_state
+        self._random_state = random_state
         self.dimensionality_ = 0
         self.num_classes_ = 0
         self.num_samples_ = 0
@@ -52,12 +52,12 @@ class BaseDataset:
         if n_classes == 2:
             synthetic_dataset = make_classification(
                 n_samples=n_samples, n_features=2, n_clusters_per_class=1, flip_y=0, n_classes=2, weights=imb_ratio,
-                class_sep=0.5, n_informative=2, n_redundant=0, n_repeated=0, random_state=self.seed_)
+                class_sep=0.5, n_informative=2, n_redundant=0, n_repeated=0, random_state=self._random_state)
 
         elif n_classes == 4:
             synthetic_dataset = make_classification(
                 n_samples=n_samples, n_features=2, n_clusters_per_class=1, flip_y=0, n_classes=4, weights=imb_ratio,
-                class_sep=1.0, n_informative=2, n_redundant=0, n_repeated=0, random_state=self.seed_)
+                class_sep=1.0, n_informative=2, n_redundant=0, n_repeated=0, random_state=self._random_state)
 
         self.feature_columns_ = 0
         self.class_column_ = 1

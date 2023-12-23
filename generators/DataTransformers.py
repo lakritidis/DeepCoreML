@@ -91,7 +91,6 @@ class DataTransformer(object):
 
         return cti
 
-
     def _fit_discrete(self, data):
         """Fit one hot encoder for discrete column.
 

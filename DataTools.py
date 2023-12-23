@@ -13,9 +13,13 @@ def set_random_states(manual_seed):
     """
     np.random.seed(manual_seed)
 
-    torch.manual_seed(manual_seed)
+    if manual_seed is None:
+        torch.manual_seed(0)
+        torch.cuda.manual_seed(0)
+    else:
+        torch.manual_seed(manual_seed)
+        torch.cuda.manual_seed(manual_seed)
 
-    torch.cuda.manual_seed(manual_seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 

@@ -13,6 +13,7 @@ from sklearn.cluster import MiniBatchKMeans
 from generators.c_gan import cGAN
 from generators.sb_gan import sbGAN
 from generators.ct_gan import ctGAN
+from generators.cbo import CBO
 
 
 class BaseSampler:
@@ -86,8 +87,8 @@ class DataSamplers:
         disc = (256, 256)
         gen = (256, 256)
         emb_dim = 32
-        knn = 5
-        rad = 200
+        knn = 10
+        rad = 400
         pac = 1
         epochs = 300
         batch_size = 32
@@ -108,6 +109,8 @@ class DataSamplers:
                                     cluster_balance_threshold=0.05, random_state=random_state)),
             BaseSampler("ADASYN", "ADASYN",
                         ADASYN(sampling_strategy=sampling_strategy, random_state=random_state)),
+            BaseSampler("CBO", "CBO",
+                        CBO(verbose=False, random_state=random_state)),
 
             BaseSampler("Conditional pac GAN", "cGAN",
                         cGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,

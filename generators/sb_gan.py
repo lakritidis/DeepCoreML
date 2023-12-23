@@ -28,7 +28,7 @@ class sbGAN(BaseGAN):
 
     def __init__(self, embedding_dim=128, discriminator=(128, 128), generator=(256, 256), pac=10, adaptive=False,
                  g_activation='tanh', epochs=300, batch_size=32, lr=2e-4, decay=1e-6,
-                 method='knn', k=5, r=10, random_state=42):
+                 method='knn', k=5, r=10, random_state=0):
         """
         Initializes a Safe-Borderline Conditional GAN.
 
@@ -112,8 +112,8 @@ class sbGAN(BaseGAN):
 
                 if pts_with_same_class >= t_high:
                     pts_types[m] = 'Core'
-                    x_sample.append(x_train[m])
-                    y_sample.append(y_train[m])
+                    # x_sample.append(x_train[m])
+                    # y_sample.append(y_train[m])
                 elif t_high > pts_with_same_class > t_low:
                     pts_types[m] = 'Border'
                     x_sample.append(x_train[m])
@@ -151,35 +151,35 @@ class sbGAN(BaseGAN):
 
         # DISCRIMINATOR TRAINING
         # Create fake samples from Generator
-        self.D_.zero_grad()
+        self.D_optimizer_.zero_grad()
 
         # 1. Randomly take samples from a normal distribution
         # 2. Assign one-hot-encoded random classes
         # 3. Pass the fake data (samples + classes) to the Generator
         latent_x = torch.randn((num_samples, self.embedding_dim_))
-        latent_classes = torch.from_numpy(np.random.randint(0, self.n_classes_, num_samples)).to(torch.int64)
-        latent_y = nn.functional.one_hot(latent_classes, num_classes=self.n_classes_)
+        latent_classes = torch.from_numpy(np.random.randint(0, self._n_classes, num_samples)).to(torch.int64)
+        latent_y = nn.functional.one_hot(latent_classes, num_classes=self._n_classes)
         latent_data = torch.cat((latent_x, latent_y), dim=1)
 
         # 4. The Generator produces fake samples (their labels are 0)
-        fake_x = self.G_(latent_data.to(self.device_))
+        fake_x = self.G_(latent_data.to(self._device))
         fake_labels = torch.zeros((packed_samples, 1))
 
         # 5. The real samples (coming from the dataset) with their one-hot-encoded classes are assigned labels eq. to 1.
-        real_x = real_data[:, 0:self.input_dim_]
-        real_y = real_data[:, self.input_dim_:(self.input_dim_ + self.n_classes_)]
+        real_x = real_data[:, 0:self._input_dim]
+        real_y = real_data[:, self._input_dim:(self._input_dim + self._n_classes)]
         real_labels = torch.ones((packed_samples, 1))
         # print(real_x.shape, real_y.shape)
 
         # 6. Mix (concatenate) the fake samples (from Generator) with the real ones (from the dataset).
-        all_x = torch.cat((real_x.to(self.device_), fake_x))
-        all_y = torch.cat((real_y, latent_y)).to(self.device_)
-        all_labels = torch.cat((real_labels, fake_labels)).to(self.device_)
+        all_x = torch.cat((real_x.to(self._device), fake_x))
+        all_y = torch.cat((real_y, latent_y)).to(self._device)
+        all_labels = torch.cat((real_labels, fake_labels)).to(self._device)
         all_data = torch.cat((all_x, all_y), dim=1)
 
         # 7. Reshape the data to feed it to Discriminator (num_samples, dimensionality) -> (-1, pac * dimensionality)
         # The samples are packed according to self.pac parameter.
-        all_data = all_data.reshape((-1, self.pac_ * (self.input_dim_ + self.n_classes_)))
+        all_data = all_data.reshape((-1, self.pac_ * (self._input_dim + self._n_classes)))
 
         # 8. Pass the mixed data to the Discriminator and train the Discriminator (update its weights with backprop).
         # The loss function quantifies the Discriminator's ability to classify a real/fake sample as real/fake.
@@ -189,23 +189,23 @@ class sbGAN(BaseGAN):
         self.D_optimizer_.step()
 
         # GENERATOR TRAINING
-        self.G_.zero_grad()
+        self.G_optimizer_.zero_grad()
 
         latent_x = torch.randn((num_samples, self.embedding_dim_))
-        latent_classes = torch.from_numpy(np.random.randint(0, self.n_classes_, num_samples)).to(torch.int64)
-        latent_y = nn.functional.one_hot(latent_classes, num_classes=self.n_classes_)
+        latent_classes = torch.from_numpy(np.random.randint(0, self._n_classes, num_samples)).to(torch.int64)
+        latent_y = nn.functional.one_hot(latent_classes, num_classes=self._n_classes)
         latent_data = torch.cat((latent_x, latent_y), dim=1)
 
-        fake_x = self.G_(latent_data.to(self.device_))
+        fake_x = self.G_(latent_data.to(self._device))
 
-        all_data = torch.cat((fake_x, latent_y.to(self.device_)), dim=1)
+        all_data = torch.cat((fake_x, latent_y.to(self._device)), dim=1)
 
         # Reshape the data to feed it to Discriminator ( (num_samples, dimensionality) -> ( -1, pac * dimensionality )
-        all_data = all_data.reshape((-1, self.pac_ * (self.input_dim_ + self.n_classes_)))
+        all_data = all_data.reshape((-1, self.pac_ * (self._input_dim + self._n_classes)))
 
         d_predictions = self.D_(all_data)
 
-        gen_loss = loss_function(d_predictions, real_labels.to(self.device_))
+        gen_loss = loss_function(d_predictions, real_labels.to(self._device))
         gen_loss.backward()
         self.G_optimizer_.step()
 
@@ -232,10 +232,10 @@ class sbGAN(BaseGAN):
 
         train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 
-        self.D_ = PackedDiscriminator(self.D_Arch_, input_dim=self.input_dim_ + self.n_classes_,
-                                      pac=self.pac_).to(self.device_)
-        self.G_ = Generator(self.G_Arch_, input_dim=self.embedding_dim_ + self.n_classes_, output_dim=self.input_dim_,
-                            activation=self.gen_activation_, normalize=self.batch_norm_).to(self.device_)
+        self.D_ = PackedDiscriminator(self.D_Arch_, input_dim=self._input_dim + self._n_classes,
+                                      pac=self.pac_).to(self._device)
+        self.G_ = Generator(self.G_Arch_, input_dim=self.embedding_dim_ + self._n_classes, output_dim=self._input_dim,
+                            activation=self.gen_activation_, normalize=self.batch_norm_).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
                                              lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
@@ -279,10 +279,10 @@ class sbGAN(BaseGAN):
         training_data = self.select_prepare(x_train, y_train)
         train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 
-        self.D_ = PackedDiscriminator(self.D_Arch_, input_dim=self.input_dim_ + self.n_classes_,
-                                      pac=self.pac_).to(self.device_)
-        self.G_ = Generator(self.G_Arch_, input_dim=self.embedding_dim_ + self.n_classes_, output_dim=self.input_dim_,
-                            activation=self.gen_activation_, normalize=self.batch_norm_).to(self.device_)
+        self.D_ = PackedDiscriminator(self.D_Arch_, input_dim=self._input_dim + self._n_classes,
+                                      pac=self.pac_).to(self._device)
+        self.G_ = Generator(self.G_Arch_, input_dim=self.embedding_dim_ + self._n_classes, output_dim=self._input_dim,
+                            activation=self.gen_activation_, normalize=self.batch_norm_).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
                                              lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
@@ -292,7 +292,7 @@ class sbGAN(BaseGAN):
         if gen_samples_ratio is None:
             gen_samples_ratio = self.gen_samples_ratio_
 
-        generated_data = [[None for _ in range(self.n_classes_)] for _ in range(self._epochs)]
+        generated_data = [[None for _ in range(self._n_classes)] for _ in range(self._epochs)]
         mean_met = np.zeros(self._epochs)
         mean_kld = np.zeros(self._epochs)
 
@@ -307,12 +307,12 @@ class sbGAN(BaseGAN):
             # After the GAN has been trained on the entire dataset (for the running epoch), perform sampling with the
             # Generator (of the running epoch)
             sum_acc, sum_kld = 0, 0
-            for y in range(self.n_classes_):
+            for y in range(self._n_classes):
                 # print("\tSampling Class y:", y, " Gen Samples ratio:", gen_samples_ratio[y])
                 generated_data[epoch][y] = self.sample(gen_samples_ratio[y], y)
 
                 # Convert the real data of this batch to a log-probability distribution
-                real_x_log_prob = torch.log(nn.Softmax(dim=0)(self.x_train_per_class_[y]))
+                real_x_log_prob = torch.log(nn.Softmax(dim=0)(self._samples_per_class[y]))
 
                 # Convert the generated data of this batch to a log-probability distribution
                 gen_x_log_prob = torch.log(nn.Softmax(dim=0)(generated_data[epoch][y]))
@@ -338,8 +338,8 @@ class sbGAN(BaseGAN):
                 # print(f"Epoch: {epoch+1} \tClass: {y} \t Accuracy: {acc}")
 
             # if (epoch+1) % 10 == 0:
-            mean_met[epoch] = sum_acc / self.n_classes_
-            mean_kld[epoch] = sum_kld / self.n_classes_
+            mean_met[epoch] = sum_acc / self._n_classes
+            mean_kld[epoch] = sum_kld / self._n_classes
 
             print("Epoch %4d \t Loss D.=%5.4f \t Loss G.=%5.4f \t Mean Acc=%5.4f \t Mean KLD=%5.4f" %
                   (epoch + 1, disc_loss, gen_loss, mean_met[epoch], mean_kld[epoch]))

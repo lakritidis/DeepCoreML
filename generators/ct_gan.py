@@ -187,7 +187,7 @@ class ctGAN(BaseGAN):
     """
     def __init__(self, embedding_dim=128, generator=(256, 256), discriminator=(256, 256), pac=10, adaptive=False,
                  g_activation=None, epochs=300, batch_size=32, lr=2e-4, decay=1e-6, discriminator_steps=1,
-                 log_frequency=True, verbose=False, random_state=42):
+                 log_frequency=True, verbose=False, random_state=0):
 
         super().__init__(embedding_dim, discriminator, generator, pac, adaptive, g_activation, epochs, batch_size,
                          lr, decay, random_state)
@@ -327,19 +327,19 @@ class ctGAN(BaseGAN):
 
         # CtGAN components: ctGenerator & ctDiscriminator
         self.G_ = ctGenerator(self.embedding_dim_ + self._data_sampler.dim_cond_vec(), self.G_Arch_,
-                              data_dim).to(self.device_)
+                              data_dim).to(self._device)
         # self.D_ = PackedDiscriminator(self.D_Arch_, input_dim=data_dim + self._data_sampler.dim_cond_vec(),
-        #                              pac=self.pac_, p=0.5, negative_slope=0.2).to(self.device_)
+        #                              pac=self.pac_, p=0.5, negative_slope=0.2).to(self._device)
 
         self.D_ = ctDiscriminator(data_dim + self._data_sampler.dim_cond_vec(), self.D_Arch_,
-                                  pac=self.pac_).to(self.device_)
+                                  pac=self.pac_).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
                                              lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
         self.G_optimizer_ = torch.optim.Adam(self.G_.parameters(),
                                              lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
 
-        mean = torch.zeros(self._batch_size, self.embedding_dim_, device=self.device_)
+        mean = torch.zeros(self._batch_size, self.embedding_dim_, device=self._device)
         std = mean + 1
 
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
@@ -357,8 +357,8 @@ class ctGAN(BaseGAN):
                         real = self._data_sampler.sample_data(self._batch_size, col, opt)
                     else:
                         c1, m1, col, opt = condvec
-                        c1 = torch.from_numpy(c1).to(self.device_)
-                        m1 = torch.from_numpy(m1).to(self.device_)
+                        c1 = torch.from_numpy(c1).to(self._device)
+                        m1 = torch.from_numpy(m1).to(self._device)
                         fakez = torch.cat([fakez, c1], dim=1)
 
                         perm = np.arange(self._batch_size)
@@ -369,7 +369,7 @@ class ctGAN(BaseGAN):
                     fake = self.G_(fakez)
                     fakeact = self._apply_activate(fake)
 
-                    real = torch.from_numpy(real.astype('float32')).to(self.device_)
+                    real = torch.from_numpy(real.astype('float32')).to(self._device)
 
                     if c1 is not None:
                         fake_cat = torch.cat([fakeact, c1], dim=1)
@@ -381,7 +381,7 @@ class ctGAN(BaseGAN):
                     y_fake = self.D_(fake_cat)
                     y_real = self.D_(real_cat)
 
-                    pen = self.D_.calc_gradient_penalty(real_cat, fake_cat, self.device_, self.pac_)
+                    pen = self.D_.calc_gradient_penalty(real_cat, fake_cat, self._device, self.pac_)
                     loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
 
                     self.D_optimizer_.zero_grad(set_to_none=False)
@@ -396,8 +396,8 @@ class ctGAN(BaseGAN):
                     c1, m1, col, opt = None, None, None, None
                 else:
                     c1, m1, col, opt = condvec
-                    c1 = torch.from_numpy(c1).to(self.device_)
-                    m1 = torch.from_numpy(m1).to(self.device_)
+                    c1 = torch.from_numpy(c1).to(self._device)
+                    m1 = torch.from_numpy(m1).to(self._device)
                     fakez = torch.cat([fakez, c1], dim=1)
 
                 fake = self.G_(fakez)
@@ -450,7 +450,7 @@ class ctGAN(BaseGAN):
         for i in range(steps):
             mean = torch.zeros(self._batch_size, self.embedding_dim_)
             std = mean + 1
-            fakez = torch.normal(mean=mean, std=std).to(self.device_)
+            fakez = torch.normal(mean=mean, std=std).to(self._device)
 
             if global_condition_vec is not None:
                 condvec = global_condition_vec.copy()
@@ -461,7 +461,7 @@ class ctGAN(BaseGAN):
                 pass
             else:
                 c1 = condvec
-                c1 = torch.from_numpy(c1).to(self.device_)
+                c1 = torch.from_numpy(c1).to(self._device)
                 fakez = torch.cat([fakez, c1], dim=1)
 
             fake = self.G_(fakez)
@@ -477,24 +477,24 @@ class ctGAN(BaseGAN):
 
     def set_device(self, device):
         """Set the `device` to be used ('GPU' or 'CPU)."""
-        self.device_ = device
+        self._device = device
         if self.G_ is not None:
-            self.G_.to(self.device_)
+            self.G_.to(self._device)
 
     def fit_resample(self, x_train, y_train):
         # Create the ctGAN training data
         training_data = np.concatenate((x_train, y_train.reshape((-1, 1))), axis=1)
 
-        self.input_dim_ = x_train.shape[1]
+        self._input_dim = x_train.shape[1]
 
         # Train the ctGAN
-        self.train(training_data, discrete_columns=(self.input_dim_,))
+        self.train(training_data, discrete_columns=(self._input_dim,))
 
         # One-hot-encode the class labels; Get the number of classes and the number of samples to generate per class.
         class_encoder = OneHotEncoder()
         y_encoded = class_encoder.fit_transform(y_train.reshape(-1, 1)).toarray()
-        self.n_classes_ = y_encoded.shape[1]
-        self.gen_samples_ratio_ = [int(sum(y_encoded[:, c])) for c in range(self.n_classes_)]
+        self._n_classes = y_encoded.shape[1]
+        self.gen_samples_ratio_ = [int(sum(y_encoded[:, c])) for c in range(self._n_classes)]
 
         majority_class = np.array(self.gen_samples_ratio_).argmax()
         num_majority_samples = np.max(np.array(self.gen_samples_ratio_))
@@ -503,15 +503,15 @@ class ctGAN(BaseGAN):
         x_over_train = np.copy(x_train)
         y_over_train = np.copy(y_train)
 
-        generated_data = [None for _ in range(self.n_classes_)]
-        for cls in range(self.n_classes_):
+        generated_data = [None for _ in range(self._n_classes)]
+        for cls in range(self._n_classes):
             if cls != majority_class:
                 samples_to_generate = num_majority_samples - self.gen_samples_ratio_[cls]
 
                 # print("\tSampling Class y:", y, " Gen Samples ratio:", gen_samples_ratio[y])
                 # generated_data[cls] = self.sample(samples_to_generate, cls).cpu().detach()
-                generated_data[cls] = self.sample(n=samples_to_generate, condition_column=str(self.input_dim_),
-                                                  condition_value=cls)[:, 0:self.input_dim_]
+                generated_data[cls] = self.sample(n=samples_to_generate, condition_column=str(self._input_dim),
+                                                  condition_value=cls)[:, 0:self._input_dim]
 
                 min_classes = np.full(samples_to_generate, cls)
 

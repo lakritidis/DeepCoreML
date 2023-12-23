@@ -134,7 +134,7 @@ class ctDiscriminator(nn.Module):
         super().__init__()
         dim = input_dim * pac
         self.pac = pac
-        self.pacdim = dim
+        self.pac_dim = dim
         seq = []
         for item in list(discriminator_dim):
             seq += [nn.Linear(dim, item), nn.LeakyReLU(0.2), nn.Dropout(0.5)]
@@ -167,5 +167,4 @@ class ctDiscriminator(nn.Module):
     def forward(self, x):
         """Apply the Discriminator to the `input_`."""
         assert x.size()[0] % self.pac == 0
-        return self.seq(x.view(-1, self.pacdim))
-
+        return self.seq(x.view(-1, self.pac_dim))

@@ -13,7 +13,7 @@ class BaseReducer:
     Base class for dimensionality reduction
     """
     def __init__(self, latent_dimensionality, random_state, **kwargs):
-        self.seed_ = random_state
+        self._random_state = random_state
         self.latent_dim_ = latent_dimensionality
         self.reducer_ = None
         super().__init__(**kwargs)
@@ -118,7 +118,7 @@ class AutoencoderReducer(nn.Module):
 
         self.latent_dimensionality_ = n_components
         self.input_dimensionality_ = input_dimensionality
-        self.seed_ = random_state
+        self._random_state = random_state
         self.device_ = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.epochs_ = training_epochs
         self.batch_size_ = batch_size
@@ -211,7 +211,7 @@ class FeatureSelector(BaseReducer):
         num_features = features.shape[1]
         for f in range(num_features):
             feat = features[:, f].reshape(-1, 1)
-            score = mutual_info_classif(feat, labels, discrete_features=[False], random_state=self.seed_)
+            score = mutual_info_classif(feat, labels, discrete_features=[False], random_state=self._random_state)
             feature_scores[f] = score[0]
 
         value_key_pairs = ((value, key) for (key, value) in feature_scores.items())
