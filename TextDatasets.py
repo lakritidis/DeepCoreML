@@ -37,8 +37,8 @@ class TextDataset(BaseDataset):
          * punctuation removal and
          * stopword removal.
         """
-        self.df_.columns.values[self.feature_columns_] = '_text_'
-        self.df_.columns.values[self.class_column_] = '_class_'
+        self.df_.columns.values[self._feature_columns] = '_text_'
+        self.df_.columns.values[self._class_column] = '_class_'
 
         self.df_['_text_'].replace('', np.nan, inplace=True)
         self.df_.dropna(subset=['_text_'], inplace=True)
@@ -73,9 +73,9 @@ class TextDataset(BaseDataset):
 
         vector_data = vectorizer.fit_transform(raw_data)
         self.vectorization_time_ = vectorizer.vectorization_time_
-        self.dimensionality_ = vectorizer.get_dimensionality()
+        self._dimensionality = vectorizer.get_dimensionality()
 
-        print("completed in %5.2f sec (dimensionality = %d)." % (self.vectorization_time_, self.dimensionality_))
+        print("completed in %5.2f sec (dimensionality = %d)." % (self.vectorization_time_, self._dimensionality))
         return vector_data
 
     def get_preprocessing_time(self):

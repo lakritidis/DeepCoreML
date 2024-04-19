@@ -8,16 +8,13 @@ class DataAnimator:
         self.num_classes = num_classes
         self.file_name = file_name
 
-        self.pt = [None for i in range(num_classes)]
-
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111)
         self.ax.grid(True)
         self.ax.set_xlabel("x1")
         self.ax.set_ylabel("x2")
 
-        for c in range(num_classes):
-            self.pt[c], = self.ax.plot([], [], 'o')
+        self.pt = [self.ax.plot([], [], 'o') for _ in range(num_classes)]
 
     def init(self):
         for c in range(self.num_classes):

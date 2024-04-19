@@ -1,7 +1,7 @@
-from sklearn.svm import SVC
 from sklearn.neural_network import MLPClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.linear_model import LogisticRegression
+# from sklearn.svm import SVC
+# from sklearn.tree import DecisionTreeClassifier
+# from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 
 
@@ -31,11 +31,11 @@ class Classifiers:
             # BaseClassifier("Decision Tree", "DT",
             #               DecisionTreeClassifier(criterion='gini', max_depth=None,
             #                                      max_features=None, random_state=random_state)),
-            BaseClassifier("Random Forest", "RF",
-                           RandomForestClassifier(n_estimators=50, criterion='gini', max_depth=None,
-                                                  max_features='sqrt', n_jobs=1, random_state=random_state)),
+            # BaseClassifier("Random Forest", "RF",
+            #               RandomForestClassifier(n_estimators=50, criterion='gini', max_depth=None,
+            #                                      max_features='sqrt', n_jobs=1, random_state=random_state)),
             BaseClassifier("Multilayer Perceptron", "MLP",
                            MLPClassifier(activation='relu', hidden_layer_sizes=(128, 128), solver='adam', max_iter=300,
-                                         random_state=random_state))
+                                         random_state=random_state)),
         )
         self.num_classifiers_ = len(self.models_)

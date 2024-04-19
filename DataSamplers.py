@@ -13,7 +13,16 @@ from sklearn.cluster import MiniBatchKMeans
 from generators.c_gan import cGAN
 from generators.sb_gan import sbGAN
 from generators.ct_gan import ctGAN
-from generators.cbo import CBO
+
+# from generators.gaan_v1 import GAANv1
+# from generators.gaan_v2 import GAANv2
+# from generators.gaan_v3 import GAANv3
+from generators.gaan_v4 import GAANv4
+from generators.cbr import CBR
+
+from sdv.single_table import GaussianCopulaSynthesizer
+from sdv.single_table import CTGANSynthesizer
+# from sdv.single_table import TVAESynthesizer
 
 
 class BaseSampler:
@@ -60,11 +69,11 @@ class DataSamplers:
     """
     Array of data over-sampling and inder-sampling techniques.
     """
-    def __init__(self, sampling_strategy='auto', random_state=0, **kwargs):
+    def __init__(self, metadata, sampling_strategy='auto', random_state=0, **kwargs):
         """
-        :param sampling_strategy: float, str, dict or callable, default=auto
+        :param sampling_strategy: how fit_resample creates samples
         Sampling information to resample the data set.
-         * When float, it corresponds to the desired ratio of the number of samples in the minority class over the
+         * When is float, it corresponds to the desired ratio of the number of samples in the minority class over the
            number of samples in the majority class after resampling. float is only available for binary classification.
            An error is raised for multi-class classification.
          * When str, specify the class targeted by the resampling. The number of samples in the different classes will
@@ -88,49 +97,105 @@ class DataSamplers:
         gen = (256, 256)
         emb_dim = 32
         knn = 10
-        rad = 400
+        rad = 1
         pac = 1
         epochs = 300
         batch_size = 32
+        max_clusters = 20
         act = 'tanh'
 
         self.over_samplers_ = (
             BaseSampler("None", "None", None),
+
             BaseSampler("Random Oversampling", "ROS",
                         RandomOverSampler(sampling_strategy=sampling_strategy, random_state=random_state)),
+
             BaseSampler("SMOTE", "SMOTE",
                         SMOTE(sampling_strategy=sampling_strategy, random_state=random_state)),
+
             BaseSampler("Borderline SMOTE", "B-SMOTE",
                         BorderlineSMOTE(sampling_strategy=sampling_strategy, random_state=random_state)),
+
             BaseSampler("SMOTE SVM", "SVM-SMOTE",
                         SVMSMOTE(sampling_strategy=sampling_strategy, random_state=random_state)),
+
             BaseSampler("KMeans SMOTE", "KMN-SMOTE",
                         KMeansSMOTE(sampling_strategy=sampling_strategy, kmeans_estimator=clus,
                                     cluster_balance_threshold=0.05, random_state=random_state)),
+
             BaseSampler("ADASYN", "ADASYN",
                         ADASYN(sampling_strategy=sampling_strategy, random_state=random_state)),
-            BaseSampler("CBO", "CBO",
-                        CBO(verbose=False, random_state=random_state)),
 
-            BaseSampler("Conditional pac GAN", "cGAN",
+            BaseSampler("CBR", "CBR",
+                        CBR(min_distance_factor=3, verbose=False, random_state=random_state)),
+
+            BaseSampler("Conditional GAN", "CGAN",
                         cGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
                              g_activation=act, epochs=epochs, batch_size=batch_size, random_state=random_state)),
 
-            BaseSampler("Safe-Borderline GAN (KNN)", "SBGAN-KNN",
+            BaseSampler("Safe-Borderline GAN (KNN)", "SBGAN",
                         sbGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
                               g_activation=act, epochs=epochs, batch_size=batch_size, method='knn', k=knn, r=rad,
-                              random_state=random_state)),
-
-            BaseSampler("Safe-Borderline GAN (RAD)", "SBGAN-RAD",
-                        sbGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-                              g_activation=act, epochs=epochs, batch_size=batch_size, method='rad', k=knn, r=rad,
                               random_state=random_state)),
 
             BaseSampler("ctGAN", "ctGAN",
                         ctGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
                               g_activation=None, epochs=epochs, batch_size=batch_size, discriminator_steps=1,
-                              log_frequency=True, verbose=False, random_state=random_state)),
+                              log_frequency=True, verbose=False, random_state=random_state))
 
+            #BaseSampler("Gaussian Copula", "GCOP",
+            #            GaussianCopulaSynthesizer(
+            #                metadata, enforce_min_max_values=False, enforce_rounding=False)),
+
+            #BaseSampler("CTGAN", "CTGAN",
+            #            CTGANSynthesizer(
+            #                metadata, enforce_min_max_values=False, enforce_rounding=False, epochs=epochs,
+            #                verbose=False))
+
+            # BaseSampler("GAAN", "GAAN",
+            #            GAANv4(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                   g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+            #                   projector=None, random_state=random_state)),
+
+            # BaseSampler("Cluster GAN-Uniform", "ClusterGAN-Uni",
+            #            GAANv1(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                       g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+            #                       cond_vector='uniform', projector=None, random_state=random_state)),
+
+            # BaseSampler("Cluster GAN-Probabilistic", "ClusterGAN-Prob",
+            #            GAANv1(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                       g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+            #                       cond_vector='prob', projector=None, random_state=random_state)),
+
+            # BaseSampler("GMM GAN", "GMM-GAN",
+            #            GAANv2(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                   g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+            #                   projector=None, random_state=random_state)),
+
+            # BaseSampler("GAAN", "GAAN",
+            #            GAANv3(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                   g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+            #                   projector=None, random_state=random_state)),
+
+        )
+
+        self.over_samplers_sdv_ = (
+            BaseSampler("GAAN", "GAAN",
+                        GAANv4(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+                               g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+                               projector=None, random_state=random_state)),
+
+            BaseSampler("Gaussian Copula", "GCOP",
+                        GaussianCopulaSynthesizer(
+                            metadata, enforce_min_max_values=False, enforce_rounding=False)),
+
+            BaseSampler("CTGAN", "CTGAN",
+                        CTGANSynthesizer(
+                            metadata, enforce_min_max_values=False, enforce_rounding=False, epochs=epochs,
+                            verbose=False)),
+
+            # BaseSampler("TVAE", "TVAE",
+            #            TVAESynthesizer(metadata, enforce_min_max_values=True, enforce_rounding=False, epochs=epochs)),
         )
 
         self.under_samplers_ = (

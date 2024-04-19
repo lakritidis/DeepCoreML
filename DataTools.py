@@ -59,11 +59,11 @@ def reset_random_states(np_random_state, torch_random_state, cuda_random_state):
 
 
 @contextlib.contextmanager
-def ct_set_random_states(random_state, set_model_random_state):
+def ct_set_random_states(seed, set_model_random_state):
     """Context manager for managing the random state.
 
     Args:
-        random_state (int or tuple):
+        seed (int or tuple):
             The random seed or a tuple of (numpy.random.RandomState, torch.Generator).
         set_model_random_state (function):
             Function to set the random state on the model.
@@ -71,7 +71,7 @@ def ct_set_random_states(random_state, set_model_random_state):
     original_np_state = np.random.get_state()
     original_torch_state = torch.get_rng_state()
 
-    random_np_state, random_torch_state = random_state
+    random_np_state, random_torch_state = seed
 
     np.random.set_state(random_np_state.get_state())
     torch.set_rng_state(random_torch_state.get_state())

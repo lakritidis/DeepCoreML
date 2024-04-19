@@ -63,7 +63,7 @@ class tfidfVectorizer(BaseTextVectorizer):
         """
         return self.vectorizer_.transform(x)
 
-    def fit_transform(self, x, y):
+    def fit_transform(self, x, y=None):
         self.vectorizer_.fit(x)
         x_vec = self.vectorizer_.transform(x)
         return x_vec
