@@ -11,7 +11,7 @@ from collections import namedtuple
 SpanInfo = namedtuple('SpanInfo', ['dim', 'activation_fn'])
 ColumnTransformInfo = namedtuple(
     'ColumnTransformInfo', [
-        'column_name', 'column_type', 'transform', 'output_info', 'output_dimensions'
+        'column_name', 'column_type', 'transform', 'column_max', 'column_min', 'output_info', 'output_dimensions'
     ]
 )
 
@@ -64,31 +64,48 @@ class DataTransformer(object):
             namedtuple: A ``ColumnTransformInfo`` object.
         """
         column_name = data.columns[0]
+        max_val = data.max()
+        min_val = data.min()
 
         cti = None
         if self._cont_normalizer == 'gm':
-            gm = ClusterBasedNormalizer(model_missing_values=True, max_clusters=min(len(data), self._max_clusters))
-            gm.fit(data, column_name)
-            num_components = sum(gm.valid_component_indicator)
+            tran = ClusterBasedNormalizer(model_missing_values=True, max_clusters=min(len(data), self._max_clusters))
+            tran.fit(data, column_name)
+            num_components = sum(tran.valid_component_indicator)
 
-            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=gm,
+            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
+                                      column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh'), SpanInfo(num_components, 'softmax')],
                                       output_dimensions=1 + num_components)
 
         elif self._cont_normalizer == 'gmo':
-            gm = ClusterBasedNormalizer(model_missing_values=True, max_clusters=min(len(data), self._max_clusters))
-            gm.fit(data, column_name)
+            tran = ClusterBasedNormalizer(model_missing_values=True, max_clusters=min(len(data), self._max_clusters))
+            tran.fit(data, column_name)
 
-            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=gm,
+            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
+                                      column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
 
         elif self._cont_normalizer == 'ss':
+            tran = StandardScaler(with_mean=self._with_mean, with_std=self._with_std)
+            tran.fit(data)
+
+            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
+                                      column_max=max_val, column_min=min_val,
+                                      output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
+        '''
+        elif self._cont_normalizer == 'ss-pca':
+            tran = Pipeline([
+                ('scaler', StandardScaler(with_mean=True, with_std=True)),
+                ('pca', PCA(n_components=self._input_dim, random_state=self._random_state))
+            ])
             ss = StandardScaler(with_mean=self._with_mean, with_std=self._with_std)
             ss.fit(data)
 
             cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=ss,
+                                      column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
-
+        '''
         return cti
 
     def _fit_discrete(self, data):
@@ -107,10 +124,11 @@ class DataTransformer(object):
 
         return ColumnTransformInfo(
             column_name=column_name, column_type='discrete', transform=ohe,
+            column_max=-1, column_min=-1,
             output_info=[SpanInfo(num_categories, 'softmax')], output_dimensions=num_categories)
 
     def fit(self, raw_data, discrete_columns=()):
-        """Fit the ``DataTransformer``.
+        """Fit the ``DataTransformer`` in a column-wise fashion. One transformer is fitted per column.
 
         Fits a ``ClusterBasedNormalizer`` for continuous columns and a ``OneHotEncoder`` for discrete columns. This
         step also counts the #columns in matrix data and span information.
@@ -156,7 +174,7 @@ class DataTransformer(object):
             output[np.arange(index.size), index + 1] = 1.0
 
         elif self._cont_normalizer == 'ss':
-            output = column_transform_info.transform.transform(data).to_numpy()
+            output = column_transform_info.transform.transform(data)
 
         return output
 

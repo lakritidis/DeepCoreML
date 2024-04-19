@@ -5,7 +5,6 @@ import torch.nn as nn
 
 from torch.utils.data import DataLoader
 
-from sklearn.metrics import accuracy_score
 from sklearn.neighbors import KDTree
 
 from .DataTransformers import DataTransformer
@@ -26,8 +25,8 @@ class sbGAN(BaseGAN):
     uses a Packed Discriminator to prevent the model from mode collapsing.
     """
 
-    def __init__(self, embedding_dim=128, discriminator=(128, 128), generator=(256, 256), pac=10, adaptive=False,
-                 g_activation='tanh', epochs=300, batch_size=32, lr=2e-4, decay=1e-6,
+    def __init__(self, embedding_dim=128, discriminator=(128, 128), generator=(256, 256), pac=10, g_activation='tanh',
+                 adaptive=False, epochs=300, batch_size=32, lr=2e-4, decay=1e-6, sampling_mode='balance',
                  method='knn', k=5, r=10, random_state=0):
         """
         Initializes a Safe-Borderline Conditional GAN.
@@ -50,8 +49,8 @@ class sbGAN(BaseGAN):
             r: The radius of the hypersphere that includes the neighboring samples; applied when `method='rad'`.
             random_state: An integer for seeding the involved random number generators.
         """
-        super().__init__(embedding_dim, discriminator, generator, pac, adaptive, g_activation, epochs, batch_size,
-                         lr, decay, random_state)
+        super().__init__(embedding_dim, discriminator, generator, pac, g_activation, adaptive, epochs, batch_size,
+                         lr, decay, sampling_mode, random_state)
 
         self._method = method
         self._n_neighbors = k
@@ -226,6 +225,7 @@ class sbGAN(BaseGAN):
 
         self._transformer = DataTransformer(cont_normalizer='ss')
         self._transformer.fit(x_train)
+        x_train = self._transformer.transform(x_train)
 
         # select_prepare: implemented in BaseGenerators.py
         training_data = self.select_prepare(x_train, y_train)
@@ -245,106 +245,13 @@ class sbGAN(BaseGAN):
         disc_loss, gen_loss = 0, 0
         for epoch in range(self._epochs):
             for n, real_data in enumerate(train_dataloader):
-                disc_loss, gen_loss = self.train_batch(real_data)
+                if real_data.shape[0] > 1:
+                    disc_loss, gen_loss = self.train_batch(real_data)
 
                 # if epoch % 10 == 0 and n >= x_train.shape[0] // batch_size:
                 #    print(f"Epoch: {epoch} Loss D.: {disc_loss} Loss G.: {gen_loss}")
 
         return disc_loss, gen_loss
-
-    def adaptive_train(self, x_train, y_train, clf, gen_samples_ratio=None):
-
-        """ Adaptive SBGAN training
-
-        Adaptive training by evaluating the quality of generated data during each epoch. Adaptive training is
-        self-terminated when max training accuracy (of a classifier `clf`) is achieved.
-
-        Args:
-            x_train: The training data instances.
-            y_train: The classes of the training data instances.
-            clf: A classifier that has been previously trained on the training set. Its performance is measured
-                at each training epoch.
-            gen_samples_ratio: A tuple/list that denotes the number of samples to be generated from each class.
-        """
-        # Use KL Divergence to measure the distance between the real and generated data.
-        kl_loss = nn.KLDivLoss(reduction="sum", log_target=True)
-
-        factor = self._batch_size // self.pac_
-        batch_size = factor * self.pac_
-
-        self._transformer = DataTransformer(cont_normalizer='ss')
-        self._transformer.fit(x_train)
-
-        # select_prepare: implemented in BaseGenerators.py
-        training_data = self.select_prepare(x_train, y_train)
-        train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
-
-        self.D_ = PackedDiscriminator(self.D_Arch_, input_dim=self._input_dim + self._n_classes,
-                                      pac=self.pac_).to(self._device)
-        self.G_ = Generator(self.G_Arch_, input_dim=self.embedding_dim_ + self._n_classes, output_dim=self._input_dim,
-                            activation=self.gen_activation_, normalize=self.batch_norm_).to(self._device)
-
-        self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
-        self.G_optimizer_ = torch.optim.Adam(self.G_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
-
-        if gen_samples_ratio is None:
-            gen_samples_ratio = self.gen_samples_ratio_
-
-        generated_data = [[None for _ in range(self._n_classes)] for _ in range(self._epochs)]
-        mean_met = np.zeros(self._epochs)
-        mean_kld = np.zeros(self._epochs)
-
-        # Begin training in epochs
-        disc_loss, gen_loss = 0, 0
-        for epoch in range(self._epochs):
-
-            # Train the GAN in batches
-            for n, real_data in enumerate(train_dataloader):
-                disc_loss, gen_loss = self.train_batch(real_data)
-
-            # After the GAN has been trained on the entire dataset (for the running epoch), perform sampling with the
-            # Generator (of the running epoch)
-            sum_acc, sum_kld = 0, 0
-            for y in range(self._n_classes):
-                # print("\tSampling Class y:", y, " Gen Samples ratio:", gen_samples_ratio[y])
-                generated_data[epoch][y] = self.sample(gen_samples_ratio[y], y)
-
-                # Convert the real data of this batch to a log-probability distribution
-                real_x_log_prob = torch.log(nn.Softmax(dim=0)(self._samples_per_class[y]))
-
-                # Convert the generated data of this batch to a log-probability distribution
-                gen_x_log_prob = torch.log(nn.Softmax(dim=0)(generated_data[epoch][y]))
-
-                # Compute the KL Divergence between the real and generated data
-                kld = kl_loss(real_x_log_prob, gen_x_log_prob)
-
-                # Move the generated data to CPU and compute the classifier's performance
-                generated_data[epoch][y] = generated_data[epoch][y].cpu().detach().numpy()
-
-                if self.test_classifier_ is not None:
-                    y_predicted = clf.predict(generated_data[epoch][y])
-                    y_ref = np.empty(y_predicted.shape[0])
-                    y_ref.fill(y)
-
-                    acc = accuracy_score(y_ref, y_predicted)
-                    sum_acc += acc
-
-                    # print("\t\tModel Accuracy for this class:", acc, " - kl div=", kld)
-
-                sum_kld += kld
-
-                # print(f"Epoch: {epoch+1} \tClass: {y} \t Accuracy: {acc}")
-
-            # if (epoch+1) % 10 == 0:
-            mean_met[epoch] = sum_acc / self._n_classes
-            mean_kld[epoch] = sum_kld / self._n_classes
-
-            print("Epoch %4d \t Loss D.=%5.4f \t Loss G.=%5.4f \t Mean Acc=%5.4f \t Mean KLD=%5.4f" %
-                  (epoch + 1, disc_loss, gen_loss, mean_met[epoch], mean_kld[epoch]))
-
-        return generated_data, (mean_met, mean_kld)
 
     def fit(self, x_train, y_train):
         """`fit` invokes the GAN training process. `fit` renders the CGAN class compatible with `imblearn`'s interface,
@@ -356,14 +263,105 @@ class sbGAN(BaseGAN):
         """
         self.train(x_train, y_train)
 
+        # Use GAN's Generator to create artificial samples i) either from a specific class, ii) or from a random class.
+
+    def sample(self, num_samples, y=None):
+        """ Create artificial samples using the GAN's Generator.
+
+        Args:
+            num_samples: The number of samples to generate.
+            y: The class of the generated samples. If `None`, then samples with random classes are generated.
+
+        Returns:
+            Artificial data instances created by the Generator.
+        """
+        if y is None:
+            latent_classes = torch.from_numpy(np.random.randint(0, self._n_classes, num_samples)).to(torch.int64)
+            latent_y = nn.functional.one_hot(latent_classes, num_classes=self._n_classes)
+        else:
+            latent_y = nn.functional.one_hot(torch.full(size=(num_samples,), fill_value=y), num_classes=self._n_classes)
+
+        latent_x = torch.randn((num_samples, self.embedding_dim_))
+
+        # concatenate, copy to device, and pass to generator
+        latent_data = torch.cat((latent_x, latent_y), dim=1).to(self._device)
+
+        # Generate data from the model's Generator - The feature values of the generated samples fall into the range:
+        # [-1,1]: if the activation function of the output layer of the Generator is nn.Tanh().
+        # [0,1]: if the activation function of the output layer of the Generator is nn.Sigmoid().
+
+        generated_samples = self.G_(latent_data).cpu().detach().numpy()
+        # print("Generated Samples:\n", generated_samples)
+        reconstructed_samples = self._transformer.inverse_transform(generated_samples)
+        # print("Reconstructed samples\n", reconstructed_samples)
+        return reconstructed_samples
+
     def fit_resample(self, x_train, y_train):
-        """`fit_transform` invokes the GAN training process. `fit_transform` renders the CGAN class compatible with
-        `imblearn`'s interface, allowing its usage in over-sampling/under-sampling pipelines.
+        """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. In particular, this
+         resampling operation equalizes the number of samples from each class by oversampling the minority class.
+         The function renders sbGAN compatible with the `imblearn`'s interface, allowing its usage in
+         over-sampling/under-sampling pipelines.
 
         Args:
             x_train: The training data instances.
             y_train: The classes of the training data instances.
+
+        Returns:
+            x_balanced: the balanced dataset samples
+            y_balanced: the classes of the samples of x_balanced
         """
+
+        # Train the GAN with the input data
         self.train(x_train, y_train)
 
-        return self.base_fit_resample(x_train, y_train)
+        # balance mode: Use the GAN to equalize the number of samples per class. This is achieved by generating
+        # samples of the minority classes (i.e. we perform oversampling).
+        if self._sampling_mode == 'balance':
+            majority_class = np.array(self._gen_samples_ratio).argmax()
+            num_majority_samples = np.max(np.array(self._gen_samples_ratio))
+
+            x_balanced = np.copy(x_train)
+            y_balanced = np.copy(y_train)
+
+            # Perform oversampling
+            for cls in range(self._n_classes):
+                if cls != majority_class:
+                    samples_to_generate = num_majority_samples - self._gen_samples_ratio[cls]
+
+                    if samples_to_generate > 1:
+                        # Generate the appropriate number of samples to equalize cls with the majority class.
+                        # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
+                        generated_samples = self.sample(samples_to_generate, cls)
+                        generated_classes = np.full(samples_to_generate, cls)
+
+                        x_balanced = np.vstack((x_balanced, generated_samples))
+                        y_balanced = np.hstack((y_balanced, generated_classes))
+
+            # Return balanced_data
+            return x_balanced, y_balanced
+
+        # synthesize_similar mode: Use the GAN to create a new dataset with identical class distribution
+        # as the training set.
+        elif self._sampling_mode == 'synthesize_similar':
+            i = 0
+            x_synthetic = None
+            y_synthetic = None
+
+            # Perform oversampling
+            for cls in range(self._n_classes):
+                # print("Sampling class", cls, "Create", self._gen_samples_ratio[cls], "samples")
+                samples_to_generate = self._gen_samples_ratio[cls]
+
+                generated_samples = self.sample(samples_to_generate, cls)
+                generated_classes = np.full(samples_to_generate, cls)
+
+                if i == 0:
+                    x_synthetic = generated_samples
+                    y_synthetic = generated_classes
+                else:
+                    x_synthetic = np.vstack((x_synthetic, generated_samples))
+                    y_synthetic = np.hstack((y_synthetic, generated_classes))
+                i += 1
+
+            # Return balanced_data
+            return x_synthetic, y_synthetic

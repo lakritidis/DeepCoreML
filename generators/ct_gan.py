@@ -13,8 +13,6 @@ from .gan_discriminators import ctDiscriminator
 from .gan_generators import ctGenerator
 from .BaseGenerators import BaseGAN
 
-np.set_printoptions(threshold=np.inf, linewidth=250, precision=3, suppress=True,)
-
 
 class DataSampler(object):
     """DataSampler samples the conditional vector and corresponding data for CTGAN."""
@@ -185,12 +183,12 @@ class ctGAN(BaseGAN):
         pac (int):
             Number of samples to group together when applying the discriminator. Defaults to 10.
     """
-    def __init__(self, embedding_dim=128, generator=(256, 256), discriminator=(256, 256), pac=10, adaptive=False,
-                 g_activation=None, epochs=300, batch_size=32, lr=2e-4, decay=1e-6, discriminator_steps=1,
-                 log_frequency=True, verbose=False, random_state=0):
+    def __init__(self, embedding_dim=128, generator=(256, 256), discriminator=(256, 256), pac=10, g_activation=None,
+                 adaptive=False, epochs=300, batch_size=32, lr=2e-4, decay=1e-6, sampling_mode='balance',
+                 discriminator_steps=1, log_frequency=True, verbose=False, random_state=0):
 
-        super().__init__(embedding_dim, discriminator, generator, pac, adaptive, g_activation, epochs, batch_size,
-                         lr, decay, random_state)
+        super().__init__(embedding_dim, discriminator, generator, pac, g_activation, adaptive, epochs, batch_size,
+                         lr, decay, sampling_mode, random_state)
 
         assert batch_size % 2 == 0
 
@@ -423,7 +421,28 @@ class ctGAN(BaseGAN):
                 print(f'Epoch {i+1}, Loss G: {loss_g.detach().cpu(): .4f},'
                       f'Loss D: {loss_d.detach().cpu(): .4f}', flush=True)
 
-    def sample(self, n, condition_column=None, condition_value=None):
+    def fit(self, x_train, y_train):
+        """`fit` invokes the GAN training process. `fit` renders ctGAN compatible with `imblearn`'s interface,
+        allowing its usage in over-sampling/under-sampling pipelines.
+
+        Args:
+            x_train: The training data instances.
+            y_train: The classes of the training data instances.
+        """
+        training_data = np.concatenate((x_train, y_train.reshape((-1, 1))), axis=1)
+
+        self._input_dim = x_train.shape[1]
+
+        # One-hot-encode the class labels; Get the number of classes and the number of samples to generate per class.
+        class_encoder = OneHotEncoder()
+        y_encoded = class_encoder.fit_transform(y_train.reshape(-1, 1)).toarray()
+        self._n_classes = y_encoded.shape[1]
+        self._gen_samples_ratio = [int(sum(y_encoded[:, c])) for c in range(self._n_classes)]
+
+        # Train the ctGAN
+        self.train(training_data, discrete_columns=(self._input_dim,))
+
+    def sample_original(self, n, condition_column=None, condition_value=None):
         """Sample data similar to the training data.
 
         Choosing a condition_column and condition_value will increase the probability of the
@@ -475,13 +494,28 @@ class ctGAN(BaseGAN):
 
         return self._transformer.inverse_transform(data)
 
-    def set_device(self, device):
-        """Set the `device` to be used ('GPU' or 'CPU)."""
-        self._device = device
-        if self.G_ is not None:
-            self.G_.to(self._device)
+    def sample(self, num_samples, y=None):
+        """Wrapper to the `sample_original` function. It provides a unified interface, similar to the `sample` methods
+        of the other GANs.
+        """
+        return self.sample_original(n=num_samples, condition_column=str(self._input_dim),
+                                    condition_value=y)[:, 0:self._input_dim]
 
     def fit_resample(self, x_train, y_train):
+        """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. In particular, this
+         resampling operation equalizes the number of samples from each class by oversampling the minority class.
+         The function renders the ctGAN class compatible with the `imblearn`'s interface, allowing its usage in
+         over-sampling/under-sampling pipelines.
+
+        Args:
+            x_train: The training data instances.
+            y_train: The classes of the training data instances.
+
+        Returns:
+            x_balanced: the balanced dataset samples
+            y_balanced: the classes of the samples of x_balanced
+        """
+
         # Create the ctGAN training data
         training_data = np.concatenate((x_train, y_train.reshape((-1, 1))), axis=1)
 
@@ -494,31 +528,58 @@ class ctGAN(BaseGAN):
         class_encoder = OneHotEncoder()
         y_encoded = class_encoder.fit_transform(y_train.reshape(-1, 1)).toarray()
         self._n_classes = y_encoded.shape[1]
-        self.gen_samples_ratio_ = [int(sum(y_encoded[:, c])) for c in range(self._n_classes)]
+        self._gen_samples_ratio = [int(sum(y_encoded[:, c])) for c in range(self._n_classes)]
 
-        majority_class = np.array(self.gen_samples_ratio_).argmax()
-        num_majority_samples = np.max(np.array(self.gen_samples_ratio_))
+        # balance mode: Use the GAN to equalize the number of samples per class. This is achieved by generating
+        # samples of the minority classes (i.e. we perform oversampling).
+        if self._sampling_mode == 'balance':
+            majority_class = np.array(self._gen_samples_ratio).argmax()
+            num_majority_samples = np.max(np.array(self._gen_samples_ratio))
 
-        # X and Y data to return
-        x_over_train = np.copy(x_train)
-        y_over_train = np.copy(y_train)
+            x_balanced = np.copy(x_train)
+            y_balanced = np.copy(y_train)
 
-        generated_data = [None for _ in range(self._n_classes)]
-        for cls in range(self._n_classes):
-            if cls != majority_class:
-                samples_to_generate = num_majority_samples - self.gen_samples_ratio_[cls]
+            # Perform oversampling
+            for cls in range(self._n_classes):
+                if cls != majority_class:
+                    samples_to_generate = num_majority_samples - self._gen_samples_ratio[cls]
 
-                # print("\tSampling Class y:", y, " Gen Samples ratio:", gen_samples_ratio[y])
-                # generated_data[cls] = self.sample(samples_to_generate, cls).cpu().detach()
-                generated_data[cls] = self.sample(n=samples_to_generate, condition_column=str(self._input_dim),
-                                                  condition_value=cls)[:, 0:self._input_dim]
+                    # Generate the appropriate number of samples to equalize cls with the majority class.
+                    # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
+                    generated_samples = self.sample_original(n=samples_to_generate,
+                                                             condition_column=str(self._input_dim),
+                                                             condition_value=cls)[:, 0:self._input_dim]
 
-                min_classes = np.full(samples_to_generate, cls)
+                    generated_classes = np.full(samples_to_generate, cls)
 
-                x_over_train = np.vstack((x_over_train, generated_data[cls]))
-                y_over_train = np.hstack((y_over_train, min_classes))
+                    x_balanced = np.vstack((x_balanced, generated_samples))
+                    y_balanced = np.hstack((y_balanced, generated_classes))
 
-        # balanced_data = np.hstack((x_over_train, y_over_train.reshape((-1, 1))))
-        # return balanced_data
+            # Return balanced_data
+            return x_balanced, y_balanced
 
-        return x_over_train, y_over_train
+        # synthesize_similar mode: Use the GAN to create a new dataset with identical class distribution
+        # as the training set.
+        elif self._sampling_mode == 'synthesize_similar':
+            i = 0
+            x_synthetic = None
+            y_synthetic = None
+
+            # Perform oversampling
+            for cls in range(self._n_classes):
+                # print("Sampling class", cls, "Create", self._gen_samples_ratio[cls], "samples")
+                samples_to_generate = self._gen_samples_ratio[cls]
+
+                generated_samples = self.sample(samples_to_generate, cls)
+                generated_classes = np.full(samples_to_generate, cls)
+
+                if i == 0:
+                    x_synthetic = generated_samples
+                    y_synthetic = generated_classes
+                else:
+                    x_synthetic = np.vstack((x_synthetic, generated_samples))
+                    y_synthetic = np.hstack((y_synthetic, generated_classes))
+                i += 1
+
+            # Return balanced_data
+            return x_synthetic, y_synthetic

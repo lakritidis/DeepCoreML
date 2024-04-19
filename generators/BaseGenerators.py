@@ -1,7 +1,6 @@
 import numpy as np
 
 import torch
-import torch.nn as nn
 
 from sklearn.preprocessing import OneHotEncoder
 
@@ -18,7 +17,8 @@ class BaseGenerator:
         self._input_dim = 0                     # Input data dimensionality
         self._n_classes = 0                     # Number of classes in the input dataset
         self._random_state = random_state       # An integer to seed the random number generators
-        self.gen_samples_ratio_ = None          # Array [number of samples to generate per class]
+
+        self._gen_samples_ratio = None          # Array [number of samples to generate per class]
         self._samples_per_class = None          # Array [ [x_train_per_class] ]
 
         self._epochs = epochs                   # Number of training epochs
@@ -43,10 +43,13 @@ class BaseGAN(BaseGenerator):
         batch_size: Number of data instances per training batch.
         lr: Learning rate parameter for the Generator/Discriminator Adam optimizers.
         decay: Weight decay parameter for the Generator/Discriminator Adam optimizers.
+        sampling_mode:
+         - `balance`: perform oversampling on the minority classes to establish class imbalance in the dataset
+         - `reproduce`: create a new dataset with the same class distribution as the input dataset
         random_state: An integer for seeding the involved random number generators.
     """
-    def __init__(self, embedding_dim, discriminator, generator, pac, adaptive, g_activation, epochs, batch_size,
-                 lr, decay, random_state):
+    def __init__(self, embedding_dim, discriminator, generator, pac, g_activation, adaptive, epochs, batch_size,
+                 lr, decay, sampling_mode, random_state):
 
         super().__init__(epochs, batch_size, random_state)
 
@@ -59,6 +62,7 @@ class BaseGAN(BaseGenerator):
         self._lr = lr                           # Learning rate param for the Generator/Discriminator Adam optimizers.
         self._decay = decay                     # Weight decay param for the Generator/Discriminator Adam optimizers.
         self._transformer = None                # Input data transformer (normalizers)
+        self._sampling_mode = sampling_mode     # Used in `fit_resample`: Given an input dataset, how GAN generates data
 
         # Discriminator parameters (object, architecture, optimizer)
         self.D_ = None
@@ -103,8 +107,7 @@ class BaseGAN(BaseGenerator):
         self._n_classes = y_train.shape[1]
 
         # Determine how to sample the conditional GAN in smart training
-        self.gen_samples_ratio_ = [int(sum(y_train[:, c])) for c in range(self._n_classes)]
-        # gen_samples_ratio.reverse()
+        self._gen_samples_ratio = [int(sum(y_train[:, c])) for c in range(self._n_classes)]
 
         # Class specific training data for smart training (KL/JS divergence)
         self._samples_per_class = []
@@ -116,60 +119,22 @@ class BaseGAN(BaseGenerator):
 
         return training_data
 
-    # Use GAN's Generator to create artificial samples i) either from a specific class, ii) or from a random class.
-    def sample(self, num_samples, y=None):
-        """ Create artificial samples using the GAN's Generator.
-
-        Args:
-            num_samples: The number of samples to generate.
-            y: The class of the generated samples. If `None`, then samples with random classes are generated.
-
-        Returns:
-            Artificial data instances created by the Generator.
-        """
-        if y is None:
-            latent_classes = torch.from_numpy(np.random.randint(0, self._n_classes, num_samples)).to(torch.int64)
-            latent_y = nn.functional.one_hot(latent_classes, num_classes=self._n_classes)
-        else:
-            latent_y = nn.functional.one_hot(torch.full(size=(num_samples,), fill_value=y), num_classes=self._n_classes)
-
-        latent_x = torch.randn((num_samples, self.embedding_dim_))
-
-        # concatenate, copy to device, and pass to generator
-        latent_data = torch.cat((latent_x, latent_y), dim=1).to(self._device)
-
-        # Generate data from the model's Generator - The feature values of the generated samples fall into the range:
-        # [-1,1]: if the activation function of the output layer of the Generator is nn.Tanh().
-        # [0,1]: if the activation function of the output layer of the Generator is nn.Sigmoid().
-
-        generated_samples = self.G_(latent_data).cpu().detach().numpy()
-        # print("Generated Samples:\n", generated_samples)
-        reconstructed_samples = self._transformer.inverse_transform(generated_samples)
-        # print("Reconstructed samples\n", reconstructed_samples)
-        return reconstructed_samples
-
-    def base_fit_resample(self, x_train, y_train):
-        generated_data = [None for _ in range(self._n_classes)]
-
-        majority_class = np.array(self.gen_samples_ratio_).argmax()
-        num_majority_samples = np.max(np.array(self.gen_samples_ratio_))
-
-        x_over_train = np.copy(x_train)
-        y_over_train = np.copy(y_train)
-
+    def synthesize_dataset(self):
+        i = 0
+        x_synthetic, y_synthetic = None, None
         for cls in range(self._n_classes):
-            if cls != majority_class:
-                samples_to_generate = num_majority_samples - self.gen_samples_ratio_[cls]
+            # print("Sampling class", cls, "Create", self._gen_samples_ratio[cls], "samples")
+            samples_to_generate = self._gen_samples_ratio[cls]
 
-                # print("\tSampling Class y:", y, " Gen Samples ratio:", gen_samples_ratio[y])
-                generated_data[cls] = self.sample(samples_to_generate, cls)
+            generated_samples = self.sample(samples_to_generate, cls)
+            generated_classes = np.full(samples_to_generate, cls)
 
-                min_classes = np.full(samples_to_generate, cls)
+            if i == 0:
+                x_synthetic = generated_samples
+                y_synthetic = generated_classes
+            else:
+                x_synthetic = np.vstack((x_synthetic, generated_samples))
+                y_synthetic = np.hstack((y_synthetic, generated_classes))
+            i += 1
 
-                x_over_train = np.vstack((x_over_train, generated_data[cls]))
-                y_over_train = np.hstack((y_over_train, min_classes))
-
-        # balanced_data = np.hstack((x_over_train, y_over_train.reshape((-1, 1))))
-        # return balanced_data
-
-        return x_over_train, y_over_train
+        return x_synthetic, y_synthetic
