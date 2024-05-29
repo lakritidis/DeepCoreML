@@ -320,7 +320,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
 # To use plug-and-play implementations that do not implement fit_resample, please use eval_resampling.
 # This method has been used in the experiments of the paper:
 # L. Aritidis, P. Bozanis, "A Clustering-Based Resampling Technique with Cluster Structure Analysis for Software Defect
-# Detection in Imbalanced Datasets", Information Sciences, 2024.
+# Detection in Imbalanced Datasets", Information Sciences, vol. 674, pp. 120724, 2024.
 def eval_oversampling_efficacy(datasets, num_threads, random_state):
     """Test the ability of a Generator to improve the performance of a classifier by balancing an imbalanced dataset.
     The Generator performs over-sampling on the minority classes and equalizes the number of samples per class.
