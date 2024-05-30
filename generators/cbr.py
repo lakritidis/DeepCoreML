@@ -21,10 +21,11 @@ class CentroidSampler:
     averaging the co-ordinates of the points that belong to that class. Then, generate artificial samples
     randomly, in a place over the line that connects each point and the corresponding centroid.
     """
-    def __init__(self, random_state=0):
+    def __init__(self, sampling_strategy='auto', random_state=0):
         self._n_samples = 0
         self._n_classes = 0
         self._input_dim = 0
+        self._sampling_strategy = sampling_strategy
         self._random_state = random_state
 
     def fit_resample(self, x_in, y_in):
@@ -43,16 +44,49 @@ class CentroidSampler:
         max_samples = np.max(samples_per_class)
         # print("Samples per Class:", samples_per_class, samples_per_class.shape)
 
-        # For each class
+        # For each class:)
         for cls in range(self._n_classes):
 
-            # If this is a minority class and has more than 1 data instances
-            if max_samples > samples_per_class[cls] > 1:
+            # Class balancing mode - this does not touch the majority class
+            if self._sampling_strategy == 'auto':
+
+                # If this is a minority class and has more than 1 data instances
+                if max_samples > samples_per_class[cls] > 1:
+                    idx = [p for p in range(y_res.shape[0]) if y_res[p] == cls]
+                    x_class = x_in[idx, :]
+                    num_min_samples = x_class.shape[0]
+
+                    samples_to_create = max_samples - num_min_samples
+                    centroid = np.mean(x_class, axis=0)
+
+                    # print("Minority samples of class", cls, ":\n", X_class)
+                    # print("Number of samples to create:", samples_to_create)
+                    # print("\tCluster", cls, " Centroid: ", centroid)
+
+                    generated_samples = 0
+                    m = 0
+                    while generated_samples < samples_to_create:
+                        # print("\tCreating sample", generated_samples)
+
+                        scale = np.random.uniform(0, 1)
+                        x_new = x_class[m] + scale * (x_class[m] - centroid)
+                        # print(X_new)
+
+                        x_out = np.vstack((x_out, x_new.reshape(1, -1)))
+                        y_out = np.hstack((y_out, cls))
+
+                        generated_samples += 1
+                        m += 1
+                        if m >= num_min_samples:
+                            m = 0
+
+            # Dictionary mode: self._sampling_strategy explicitly declares the number of samples to be created per class
+            elif isinstance(self._sampling_strategy, dict):
                 idx = [p for p in range(y_res.shape[0]) if y_res[p] == cls]
                 x_class = x_in[idx, :]
                 num_min_samples = x_class.shape[0]
 
-                samples_to_create = max_samples - num_min_samples
+                samples_to_create = len(idx)
                 centroid = np.mean(x_class, axis=0)
 
                 # print("Minority samples of class", cls, ":\n", X_class)
@@ -179,7 +213,6 @@ class CBR(BaseGenerator):
 
         x_ret = []
         y_ret = []
-
         for cluster in range(-1, self._n_clusters):
             x_cluster_all = x_in[cluster_labels == cluster, :]
             y_cluster_all = y_in[cluster_labels == cluster]
@@ -225,18 +258,21 @@ class CBR(BaseGenerator):
                 print("===== EXCLUDED SAMPLES FOR OVER-SAMPLING:", np.array(x_cluster_exc).shape)
                 print(np.array(x_cluster_exc))
 
-            # The samples that are excluded from cluster over-sampling are copied to the output dataset
+            # The samples that have been excluded from cluster over-sampling are copied to the output dataset
             x_ret.extend(x_cluster_exc)
             y_ret.extend(y_cluster_exc)
 
-            # The samples that are excluded from cluster over-sampling are copied to the output dataset
+            # The samples that have been included in the cluster over-sampling process will be used as
+            # reference points for data generation.
             if included_classes > 1:
                 # print("Balancing cluster", cluster)
 
                 if self._cluster_resampler == 'cs':
-                    resampler = CentroidSampler(self._random_state)
+                    resampler = CentroidSampler(sampling_strategy=self._sampling_strategy,
+                                                random_state=self._random_state)
                 else:
-                    resampler = SMOTE(k_neighbors=self._k_neighbors, random_state=self._random_state)
+                    resampler = SMOTE(k_neighbors=self._k_neighbors, sampling_strategy=self._sampling_strategy,
+                                      random_state=self._random_state)
 
                 x_1, y_1 = resampler.fit_resample(np.array(x_cluster_inc), y_cluster_inc)
                 x_ret.extend(x_1)

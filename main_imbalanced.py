@@ -16,9 +16,9 @@ path = '../../../../datasets/soft_defect/'
 # path = 'C:/Users/Owner/PycharmProjects/datasets/soft_defect/'
 
 imb_datasets = {
-    # 'AR1': {'name': 'AR1', 'path': path + 'ar1.csv', 'features_cols': range(0, 29), 'class_col': 29},
-    'CAMEL-1.2':
-     {'name': 'CAMEL-1.2', 'path': path + 'camel-1.2.csv', 'features_cols': range(0, 20), 'class_col': 20},
+    'AR1': {'name': 'AR1', 'path': path + 'ar1.csv', 'features_cols': range(0, 29), 'class_col': 29},
+    # 'CAMEL-1.2':
+    # {'name': 'CAMEL-1.2', 'path': path + 'camel-1.2.csv', 'features_cols': range(0, 20), 'class_col': 20},
     # 'CC':
     #    {'name': 'CreditCard', 'path': path + 'creditcarddefault.csv', 'features_cols': range(1, 24), 'class_col': 24},
 }

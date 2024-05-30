@@ -122,14 +122,15 @@ class DataSamplers:
         max_clusters = 20
         act = 'tanh'
 
-        self.over_samplers_test_ = (
+        self.over_samplers_ = (
             BaseSampler("None", "None", None),
 
-            BaseSampler("Random Oversampling", "ROS",
-                        RandomOverSampler(sampling_strategy=sampling_strategy, random_state=random_state))
+            BaseSampler("Conditional GAN", "CGAN",
+                        cGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+                             g_activation=act, epochs=epochs, batch_size=batch_size, random_state=random_state)),
         )
 
-        self.over_samplers_ = (
+        self.over_samplers_all_ = (
             BaseSampler("None", "None", None),
 
             BaseSampler("Random Oversampling", "ROS",
@@ -152,8 +153,8 @@ class DataSamplers:
                         ADASYN(sampling_strategy=sampling_strategy, random_state=random_state)),
 
             BaseSampler("CBR", "CBR",
-                        CBR(min_distance_factor=3, verbose=False, sampling_strategy=sampling_strategy,
-                            random_state=random_state)),
+                        CBR(cluster_estimator='hac', cluster_resampler='cs', verbose=False, k_neighbors=1,
+                            min_distance_factor=3, sampling_strategy=sampling_strategy, random_state=random_state)),
 
             BaseSampler("Conditional GAN", "CGAN",
                         cGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,

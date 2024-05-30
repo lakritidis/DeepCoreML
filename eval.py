@@ -249,15 +249,13 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
         # The last column becomes categorical - This structure is required by the Synth. Data Vault models.
         metadata.columns[k] = {'sdtype': 'categorical'}
 
-        # Find the class distribution of the dataset and store it into a dictionary. This dictionary is passed as an
-        # argument to the sampling_strategy property of the Data Samplers.
+        # Find the class distribution of the dataset and store it into a dictionary. Then pass the dictionary
+        # as an argument to the sampling_strategy property of the Data Samplers.
         unique, counts = np.unique(original_dataset.y_, return_counts=True)
         res_dict = dict(zip(unique, 2 * counts))
         samplers = DataSamplers(metadata, sampling_strategy=res_dict, random_state=random_state)
 
         real_labels = np.ones(original_dataset.get_num_samples())
-        fake_labels = np.zeros(original_dataset.get_num_samples())
-        real_fake_labels = np.concatenate((real_labels, fake_labels), axis=0)
 
         # For each sampler
         all_train_idx = [*range(original_dataset.get_num_samples())]
@@ -273,8 +271,12 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
                 x_resampled, y_resampled = sampler.fit_resample_wrapper(
                     original_dataset.x_, original_dataset.y_, original_dataset, all_train_idx)
 
-                print(real_fake_labels.shape)
-                print(x_resampled.shape)
+                # Although we require from the oversampling method to generate an equal number of samples as those
+                # included in the original dataset, several of them (e.g. K-Means SMOTE) may return more. So we
+                # must create as many fake labels as the number of generated samples.
+                num_generated_samples = y_resampled.shape[0] - original_dataset.get_num_samples()
+                fake_labels = np.zeros(num_generated_samples)
+                real_fake_labels = np.concatenate((real_labels, fake_labels), axis=0)
 
                 oversampling_duration = time.time() - t_s
 
@@ -291,6 +293,15 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
                     x_test = x_resampled[test_idx]
                     y_test = real_fake_labels[test_idx]
 
+                    # Normalize data before feeding it to the classifiers
+                    if transformer == 'standardizer':
+                        scaler = StandardScaler()
+                        x_train_scaled = scaler.fit_transform(x_train)
+                        x_test_scaled = scaler.transform(x_test)
+                    else:
+                        x_train_scaled = x_train
+                        x_test_scaled = x_test
+
                     # Initialize a new set of classifiers
                     classifiers = Classifiers(random_state=random_state)
 
@@ -298,8 +309,8 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
                     for classifier in classifiers.models_:
                         reset_random_states(np_random_state, torch_random_state, cuda_random_state)
 
-                        classifier.fit(x_train, y_train)
-                        y_predict = classifier.predict(x_test)
+                        classifier.fit(x_train_scaled, y_train)
+                        y_predict = classifier.predict(x_test_scaled)
 
                         for scorer in scorers:
                             performance = scorers[scorer](y_test, y_predict)
@@ -324,19 +335,20 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
 def eval_oversampling_efficacy(datasets, num_threads, random_state):
     """Test the ability of a Generator to improve the performance of a classifier by balancing an imbalanced dataset.
     The Generator performs over-sampling on the minority classes and equalizes the number of samples per class.
-    This function uses an ImbLearn Pipeline. Each Oversampling/Under-sampling method MUST support the fit_resample method
-    To use plug-and-play implementations that do not implement fit_resample, please use eval_resampling.
+    This function uses an ImbLearn Pipeline. Each Oversampling/Under-sampling method MUST support the fit_resample
+    method. To use plug-and-play implementations that do not implement fit_resample, please use eval_resampling.
     This method has been used in the experiments of the paper:
-    L. Aritidis, P. Bozanis, "A Clustering-Based Resampling Technique with Cluster Structure Analysis for Software Defect
-    Detection in Imbalanced Datasets", Information Sciences, 2024.
 
-    Algorithm:
+    * L. Aritidis, P. Bozanis, "A Clustering-Based Resampling Technique with Cluster Structure Analysis for Software
+      Defect Detection in Imbalanced Datasets", Information Sciences, vol. 674, pp. 120724, 2024.
 
-      1. For each dataset d, for each classifier c, for each sampler s
-      2. Fit s
-      3. d_balanced <--- over-sample(d with s)
-      4. Test classification performance of c on d_balanced
-      5. Steps 2-4 are embedded in a pipe-line; the pipe-line is cross validated with 5 folds.
+    * Algorithm:
+
+      - For each dataset d, for each classifier `c`, for each sampler `s`.
+      - Fit `s`.
+      - `d_balanced` <--- over-sample(`d` with `s`).
+      - Test classification performance of `c` on `d_balanced`.
+      - Steps 2-4 are embedded in a Pipeline; the Pipeline is cross validated with 5 folds.
     """
     set_random_states(random_state)
     np_random_state, torch_random_state, cuda_random_state = get_random_states()
