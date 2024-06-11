@@ -327,7 +327,7 @@ class cGAN(BaseGAN):
         generate synthetic data according to the value of `self._sampling_strategy`:
 
         - 'auto': the model balances the dataset by oversampling the minority classes.
-        - dict: a dictionary that indicates the number of samples to be generated from each class
+        - dict: a dictionary that indicates the number of samples to be generated from each class.
 
         Args:
             x_train: The training data instances.

@@ -199,7 +199,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
      1. Create a synthetic dataset with the same number of samples and class distribution as the original one. We
         mark the synthetic samples with flag 0.
      2. We mark the original samples with flag 1.
-     3. Merge and shuffle the datasets -> create a new dataset
+     3. Merge and shuffle the datasets -> create a new dataset.
      4. Train a classifier on the new dataset and try to predict the flag. The easier it is to predict the flag, the
         more distinguishable between real and synthetic data.
 

@@ -17,9 +17,15 @@ class CentroidSampler:
     """
     Centroid-based oversampling.
 
-    Correct data imbalance in a cluster of multi-class samples. For each class, compute a centroid point by
+    Mitigate data imbalance in a cluster of multi-class samples. For each class, compute a centroid point by
     averaging the co-ordinates of the points that belong to that class. Then, generate artificial samples
-    randomly, in a place over the line that connects each point and the corresponding centroid.
+    randomly, in a point over the line that connects each point and the corresponding centroid.
+
+    Args:
+        sampling_strategy: How the algorithm generates samples:
+          - 'auto': the model balances the dataset by oversampling the minority classes.
+          - dict: a dictionary that indicates the number of samples to be generated from each class.
+
     """
     def __init__(self, sampling_strategy='auto', random_state=0):
         self._n_samples = 0
@@ -44,13 +50,13 @@ class CentroidSampler:
         max_samples = np.max(samples_per_class)
         # print("Samples per Class:", samples_per_class, samples_per_class.shape)
 
-        # For each class:)
+        # For each class:
         for cls in range(self._n_classes):
 
-            # Class balancing mode - this does not touch the majority class
+            # Class balancing mode - this does not touch the majority class:
             if self._sampling_strategy == 'auto':
 
-                # If this is a minority class and has more than 1 data instances
+                # If this is a minority class and has more than 1 data instances:
                 if max_samples > samples_per_class[cls] > 1:
                     idx = [p for p in range(y_res.shape[0]) if y_res[p] == cls]
                     x_class = x_in[idx, :]
@@ -63,10 +69,10 @@ class CentroidSampler:
                     # print("Number of samples to create:", samples_to_create)
                     # print("\tCluster", cls, " Centroid: ", centroid)
 
+                    # Keep creating samples until the desired number (=generated_samples) is reached:
                     generated_samples = 0
                     m = 0
                     while generated_samples < samples_to_create:
-                        # print("\tCreating sample", generated_samples)
 
                         scale = np.random.uniform(0, 1)
                         x_new = x_class[m] + scale * (x_class[m] - centroid)
@@ -93,10 +99,10 @@ class CentroidSampler:
                 # print("Number of samples to create:", samples_to_create)
                 # print("\tCluster", cls, " Centroid: ", centroid)
 
+                # Keep creating samples until the desired number (=generated_samples) is reached:
                 generated_samples = 0
                 m = 0
                 while generated_samples < samples_to_create:
-                    # print("\tCreating sample", generated_samples)
 
                     scale = np.random.uniform(0, 1)
                     x_new = x_class[m] + scale * (x_class[m] - centroid)
@@ -127,8 +133,8 @@ class CBR(BaseGenerator):
         Args:
             cluster_estimator: The clustering algorithm to be applied at the dataset. Values:
 
-                * `hac` (default): Hierarchical Agglomerative Clustering
-                * `dbscan`: DBSCAN
+                * `hac` (default): Hierarchical Agglomerative Clustering.
+                * `dbscan`: DBSCAN.
 
             cluster_resampler: The over-sampling algorithm to be applied at each cluster. Values:
 
@@ -138,7 +144,8 @@ class CBR(BaseGenerator):
             verbose: Print messages during execution.
             sampling_strategy: How the algorithm generates data.
             k_neighbors: Hyper-parameter for `cluster_resampler='smote'`.
-            min_distance_factor:
+            min_distance_factor: Regulate the minimum distance for cluster merging in HAC. Decrease that value to
+                increase the minimum allowed distance for cluster merging (fewer, yet larger clusters will be created).
             random_state:
         """
         super().__init__(0, 0, random_state)
