@@ -100,24 +100,31 @@ class BaseDataset:
 
         file_extension = pathlib.Path(path).suffix
         if file_extension == '.csv':
-            self.df_ = pd.read_csv(path, encoding='utf-8')
+            input_df = pd.read_csv(path, encoding='utf-8', keep_default_na=True, na_values=['<null>'])
             # self.df_ = pd.read_csv(path, encoding='latin-1', header=None)
         else:
-            self.df_ = self.get_df(path)
+            input_df = self.get_df(path)
 
         # The class column must be the last one.
-        self._class_column_name = self.df_.columns[len(self.df_.columns) - 1]
+        self._class_column_name = input_df.columns[len(input_df.columns) - 1]
+
+        # Remove rows with missing values
+        input_df.dropna(inplace=True)
+        input_df.reset_index(drop=True, inplace=True)
 
         # Shuffle the dataframe
-        self.df_.sample(frac=1)
+        input_df.sample(frac=1)
 
-        # Convert x and y to NumPy arrays
-        self.x_ = self.df_.iloc[:, feature_cols].to_numpy()
-        self.y_ = self.df_.iloc[:, class_col].to_numpy()
+        input_x = input_df.iloc[:, feature_cols]
+        input_y = input_df.iloc[:, class_col]
+
+        # Process the input vectors and place them to self.x_
+        self.x_ = input_x.to_numpy()
+        self.df_ = input_x
 
         # Label encode the target variables
         class_encoder = LabelEncoder()
-        self.y_ = class_encoder.fit_transform(self.y_)
+        self.y_ = class_encoder.fit_transform(input_y.to_numpy())
 
         # Copy the label encoded class column to the Dataframe
         self.df_[self._class_column_name] = self.y_

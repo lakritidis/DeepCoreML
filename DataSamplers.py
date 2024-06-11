@@ -54,7 +54,7 @@ class BaseSampler:
         if self.sampler_ is not None:
             self.sampler_.fit(x, y)
 
-    def fit_resample_wrapper(self, x_train, y_train, original_dataset, train_idx):
+    def fit_resample(self, x_train, y_train, original_dataset=None, train_idx=None):
         """
         Resample the dataset.
 
@@ -74,11 +74,16 @@ class BaseSampler:
 
             # otherwise, we apply the transformation to the dataset itself:
             else:
-                self.sampler_.fit(original_dataset.df_.iloc[train_idx, :])
+                if train_idx is None or original_dataset is None:
+                    fit_data = x_train
+                else:
+                    fit_data = original_dataset.df_.iloc[train_idx, :]
+
+                self.sampler_.fit(fit_data)
                 return original_dataset.balance(self, train_idx)
 
         else:
-            return x_train
+            return x_train, y_train
 
 
 class DataSamplers:
@@ -122,15 +127,19 @@ class DataSamplers:
         max_clusters = 20
         act = 'tanh'
 
-        self.over_samplers_ = (
+        self.over_samplers_rt = (
             BaseSampler("None", "None", None),
 
-            BaseSampler("Conditional GAN", "CGAN",
-                        cGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-                             g_activation=act, epochs=epochs, batch_size=batch_size, random_state=random_state)),
+            BaseSampler("Gaussian Copula", "GCOP",
+                        GaussianCopulaSynthesizer(
+                            metadata, enforce_min_max_values=False, enforce_rounding=False)),
+
+            # BaseSampler("Conditional GAN", "CGAN",
+            #            cGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                 g_activation=act, epochs=epochs, batch_size=batch_size, random_state=random_state)),
         )
 
-        self.over_samplers_all_ = (
+        self.over_samplers_ = (
             BaseSampler("None", "None", None),
 
             BaseSampler("Random Oversampling", "ROS",
@@ -145,9 +154,9 @@ class DataSamplers:
             BaseSampler("SMOTE SVM", "SVM-SMOTE",
                         SVMSMOTE(sampling_strategy=sampling_strategy, random_state=random_state)),
 
-            BaseSampler("KMeans SMOTE", "KMN-SMOTE",
-                        KMeansSMOTE(sampling_strategy=sampling_strategy, kmeans_estimator=clus,
-                                    cluster_balance_threshold='auto', random_state=random_state)),
+            #BaseSampler("KMeans SMOTE", "KMN-SMOTE",
+            #            KMeansSMOTE(sampling_strategy=sampling_strategy,
+            #                        cluster_balance_threshold='auto', random_state=random_state)),
 
             BaseSampler("ADASYN", "ADASYN",
                         ADASYN(sampling_strategy=sampling_strategy, random_state=random_state)),

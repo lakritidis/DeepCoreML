@@ -117,8 +117,8 @@ class sbGAN(BaseGAN):
 
                 if pts_with_same_class >= t_high:
                     pts_types[m] = 'Core'
-                    # x_sample.append(x_train[m])
-                    # y_sample.append(y_train[m])
+                    x_sample.append(x_train[m])
+                    y_sample.append(y_train[m])
                 elif t_high > pts_with_same_class > t_low:
                     pts_types[m] = 'Border'
                     x_sample.append(x_train[m])

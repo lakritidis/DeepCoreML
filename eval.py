@@ -104,7 +104,7 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
 
         # Load the dataset from the input CSV file
         ds = datasets[key]
-        original_dataset = BaseDataset(ds['name'], random_state=random_state)
+        original_dataset = BaseDataset(key, random_state=random_state)
         original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['features_cols'], class_col=ds['class_col'])
 
         print("\n=================================\n Evaluating dataset", key, " - shape:", original_dataset.x_.shape)
@@ -149,7 +149,7 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                     x_balanced = x_train
                     y_balanced = y_train
                 else:
-                    x_balanced, y_balanced = sampler.fit_resample_wrapper(x_train, y_train, original_dataset, train_idx)
+                    x_balanced, y_balanced = sampler.fit_resample(x_train, y_train, original_dataset, train_idx)
 
                 oversampling_duration = time.time() - t_s
 
@@ -235,7 +235,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
 
         # Load the dataset from the input CSV file
         ds = datasets[key]
-        original_dataset = BaseDataset(ds['name'], random_state=random_state)
+        original_dataset = BaseDataset(key, random_state=random_state)
         original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['features_cols'], class_col=ds['class_col'])
 
         print("\n=================================\n Evaluating dataset", key, " - shape:", original_dataset.x_.shape)
@@ -268,7 +268,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
                 t_s = time.time()
 
                 # Generate synthetic data with the sampler
-                x_resampled, y_resampled = sampler.fit_resample_wrapper(
+                x_resampled, y_resampled = sampler.fit_resample(
                     original_dataset.x_, original_dataset.y_, original_dataset, all_train_idx)
 
                 # Although we require from the oversampling method to generate an equal number of samples as those
@@ -367,7 +367,7 @@ def eval_oversampling_efficacy(datasets, num_threads, random_state):
         print("\n=================================\n Evaluating dataset", key, "\n=================================\n")
         reset_random_states(np_random_state, torch_random_state, cuda_random_state)
         ds = datasets[key]
-        original_dataset = BaseDataset(ds['name'], random_state=random_state)
+        original_dataset = BaseDataset(key, random_state=random_state)
         original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['features_cols'], class_col=ds['class_col'])
 
         dataset_results_list = []
@@ -386,13 +386,14 @@ def eval_oversampling_efficacy(datasets, num_threads, random_state):
             # For each over-sampler, balance the input dataset. The fit_resample method of each sampler is called
             # internally by the `imblearn` pipeline and the cross validator.
             for s in samplers.over_samplers_:
+
                 reset_random_states(np_random_state, torch_random_state, cuda_random_state)
                 order += 1
 
                 print("Testing", clf.name_, "with", s.name_)
 
                 # pipe_line = make_pipeline(s.sampler_, StandardScaler(), clf.model_)
-                pipe_line = make_pipeline(s.sampler_, clf.model_)
+                pipe_line = make_pipeline(s, clf.model_)
                 r, _ = original_dataset.cross_val(estimator=pipe_line, num_folds=5, num_threads=num_threads,
                                                   classifier_str=clf.name_, sampler_str=s.name_, order=order)
 

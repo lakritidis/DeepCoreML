@@ -6,8 +6,8 @@ class ResultHandler:
         self.description_ = description
         self.cv_results = cv_results
         self.mean_results = []
-        # self._base_path = '/media/leo/7CE54B377BB9B18B/dev/Python/swDefect/results/'
-        self._base_path = 'D:/dev/python/swDefect/results/'
+        self._base_path = '/media/leo/7CE54B377BB9B18B/dev/Python/swDefect/results/'
+        # self._base_path = 'D:/dev/python/swDefect/results/'
 
     def to_df(self, result_type='folds'):
         # df_columns = ['Classifier', 'Sampler', 'Dataset',
@@ -63,13 +63,8 @@ class ResultHandler:
         # f.close()
 
         # Results in CSV format
-        self.to_df().to_csv(self._base_path + filename + '_means.csv')
-
-        # Full cross validation results
-        # f = open(self._base_path + filename + '_all_folds.txt', 'w')
-        # for item in self.crossval_results:
-        #    f.write("%s\n" % item)
-        # f.close()
+        results = self.to_df().sort_values(by=['Dataset', 'Sampler', 'Scorer', 'Fold'])
+        results.to_csv(self._base_path + filename + '_folds.csv')
 
     def record_results_full(self, filename):
         df = self.to_df()
