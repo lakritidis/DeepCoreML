@@ -1,3 +1,5 @@
+# Forked from https://github.com/sdv-dev/CTGAN.
+
 import warnings
 
 import numpy as np
@@ -153,10 +155,10 @@ class DataSampler(object):
 
 
 class ctGAN(BaseGAN):
-    """Conditional Table GAN Synthesizer.
+    """Conditional Table GAN Synthesizer. Forked from [Github](https://github.com/sdv-dev/CTGAN).
+    This implementation enriches the interface of ctGAN with a fit_resample method.
 
-    This is the core class of the CTGAN project, where the different components
-    are orchestrated together.
+    This is the core class of the CTGAN project, where the different components are orchestrated together.
     For more details about the process, please check the [Modeling Tabular data using
     Conditional GAN](https://arxiv.org/abs/1907.00503) paper.
 

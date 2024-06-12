@@ -48,8 +48,8 @@ class BaseSampler:
         Check inputs and statistics of the sampler.
 
         Args:
-            x: features of the dataset
-            y: classes of the dataset
+            x: features of the dataset.
+            y: classes of the dataset.
         """
         if self.sampler_ is not None:
             self.sampler_.fit(x, y)
@@ -59,8 +59,8 @@ class BaseSampler:
         Resample the dataset.
 
         Args:
-            x_train: features of the dataset
-            y_train: classes of the dataset
+            x_train: features of the dataset.
+            y_train: classes of the dataset.
             original_dataset: An object that represents the original input dataset - to be passed to the Synthetic
                 Data Vault models.
             train_idx: The rows of the training examples in the original dataset.
@@ -127,19 +127,36 @@ class DataSamplers:
         max_clusters = 20
         act = 'tanh'
 
-        self.over_samplers_rt = (
-            BaseSampler("None", "None", None),
+        # Experimental over-samplers.
+        self.over_samplers_ = (
+            BaseSampler("GAAN", "GAAN",
+                        GAANv4(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+                               g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+                               projector=None, random_state=random_state)),
 
-            BaseSampler("Gaussian Copula", "GCOP",
-                        GaussianCopulaSynthesizer(
-                            metadata, enforce_min_max_values=False, enforce_rounding=False)),
+            # BaseSampler("Cluster GAN-Uniform", "ClusterGAN-Uni",
+            #            GAANv1(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                       g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+            #                       cond_vector='uniform', projector=None, random_state=random_state)),
 
-            # BaseSampler("Conditional GAN", "CGAN",
-            #            cGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-            #                 g_activation=act, epochs=epochs, batch_size=batch_size, random_state=random_state)),
+            # BaseSampler("Cluster GAN-Probabilistic", "ClusterGAN-Prob",
+            #            GAANv1(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                       g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+            #                       cond_vector='prob', projector=None, random_state=random_state)),
+
+            # BaseSampler("GMM GAN", "GMM-GAN",
+            #            GAANv2(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                   g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+            #                   projector=None, random_state=random_state)),
+
+            # BaseSampler("GAAN", "GAAN",
+            #            GAANv3(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
+            #                   g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
+            #                   projector=None, random_state=random_state)),
         )
 
-        self.over_samplers_ = (
+        # All over-samplers.
+        self.over_samplers_all_ = (
             BaseSampler("None", "None", None),
 
             BaseSampler("Random Oversampling", "ROS",
@@ -154,7 +171,7 @@ class DataSamplers:
             BaseSampler("SMOTE SVM", "SVM-SMOTE",
                         SVMSMOTE(sampling_strategy=sampling_strategy, random_state=random_state)),
 
-            #BaseSampler("KMeans SMOTE", "KMN-SMOTE",
+            # BaseSampler("KMeans SMOTE", "KMN-SMOTE",
             #            KMeansSMOTE(sampling_strategy=sampling_strategy,
             #                        cluster_balance_threshold='auto', random_state=random_state)),
 

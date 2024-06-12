@@ -56,8 +56,8 @@ class BaseDataset:
 
         Args:
             n_samples: how many data instances to create.
-            n_classes: the number of classes of the synthetic data instances
-            imb_ratio: the imbalance ratio of the data (it must be a tuple comprising n_classes elements with sum=1)
+            n_classes: the number of classes of the synthetic data instances.
+            imb_ratio: the imbalance ratio of the data (it must be a tuple comprising n_classes elements with sum=1).
         """ 
         synthetic_dataset = []
         if n_classes == 2:
@@ -149,8 +149,7 @@ class BaseDataset:
     # Display the basic dataset parameters
     def display_params(self):
         """
-        Display the basic dataset parameters
-        :return:
+        Display the basic dataset parameters.
         """
         print("Num Samples:", self._num_samples, "- Dimensions:", self._dimensionality)
         print("Classes:", self._num_classes, "- Class Distribution:")
@@ -233,6 +232,18 @@ class BaseDataset:
         return results_list, mean_results_list
 
     def balance(self, sampler, train):
+        """
+        Generate artificial data samples to mitigate class imbalance in a dataset. This function is used by the
+        re-sampling methods that do not support the `fit_resample` method (like the models of the Synthetic Data
+        Vault - SDV).
+
+        Args:
+            sampler: A BaseSampler object.
+            train: The training set - for the SDV models, train is a concatenation of the feature vectors with classes.
+
+        Returns:
+            The balanced dataset.
+        """
         x_in = self.x_[train]
         y_in = self.y_[train]
 
