@@ -6,6 +6,7 @@ from sklearn.feature_selection import mutual_info_classif
 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 
 
 class BaseReducer:
@@ -160,7 +161,7 @@ class AutoencoderReducer(nn.Module):
             print(x.toarray())
             training_data = torch.from_numpy(x.toarray()).to(torch.float32).to(self.device_)
 
-        loader = torch.utils.data.DataLoader(dataset=training_data, batch_size=self.batch_size_, shuffle=True)
+        loader = DataLoader(dataset=training_data, batch_size=self.batch_size_, shuffle=True)
         loss_function = torch.nn.MSELoss()
 
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-1, weight_decay=1e-8)

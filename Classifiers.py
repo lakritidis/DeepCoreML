@@ -2,7 +2,7 @@ from sklearn.neural_network import MLPClassifier
 # from sklearn.svm import SVC
 # from sklearn.tree import DecisionTreeClassifier
 # from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+# from sklearn.ensemble import RandomForestClassifier
 
 
 class BaseClassifier:
