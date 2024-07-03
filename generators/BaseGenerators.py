@@ -1,3 +1,6 @@
+# BaseGenerator object
+# Generative models and Over-sampling methods inherit from this class.
+
 import numpy as np
 
 import torch
