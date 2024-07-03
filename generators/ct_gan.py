@@ -10,7 +10,6 @@ import torch.nn as nn
 from sklearn.preprocessing import OneHotEncoder
 
 from .DataTransformers import DataTransformer
-# from .gan_discriminators import PackedDiscriminator
 from .gan_discriminators import ctDiscriminator
 from .gan_generators import ctGenerator
 from .BaseGenerators import BaseGAN

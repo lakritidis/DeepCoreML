@@ -8,14 +8,14 @@ from imblearn.pipeline import make_pipeline
 
 from sklearn.ensemble import RandomForestClassifier
 
+import DeepCoreML.paths as paths
+
 seed = 1
 DataTools.set_random_states(seed)
 
-dataset_path = 'C:/Users/Leo/PycharmProjects/datasets/text_sentiment/'
-
 datasets = {
-            'Twitter_US_Air': (dataset_path + 'Twitter_US_Airline_Sentiment.csv', range(10, 11), 1),
-            'Twitter_Fin_Sent': (dataset_path + 'Twitter_Financial_Sentiment.csv', range(0, 1), 1)
+            'Twitter_US_Air': (paths.dataset_path + 'Twitter_US_Airline_Sentiment.csv', range(10, 11), 1),
+            'Twitter_Fin_Sent': (paths.dataset_path + 'Twitter_Financial_Sentiment.csv', range(0, 1), 1)
             }
 
 dataset = datasets['Twitter_US_Air']

@@ -22,7 +22,8 @@ class DataTransformer(object):
     Model continuous columns with a BayesianGMM and normalized to a scalar [0, 1] and a vector.
     Discrete columns are encoded using a scikit-learn OneHotEncoder.
     """
-    def __init__(self, cont_normalizer='gm', max_clusters=10, weight_threshold=0.005, with_mean=True, with_std=True):
+    def __init__(self, cont_normalizer='gm', max_clusters=10, weight_threshold=0.005, with_mean=True, with_std=True,
+                 cap=False):
         """Create a data transformer.
 
         Args:
@@ -37,10 +38,10 @@ class DataTransformer(object):
                 used when `cont_normalizer='gm'` or `'gmo'`.
             with_mean: If True, it centers the data before scaling. This does not work (and will raise an exception)
                 when attempted on sparse matrices, because centering them entails building a dense matrix which in
-                common use cases is likely to be too large to fit in memory;
-                used when `cont_normalizer='ss'`.
+                common use cases is likely to be too large to fit in memory; used when `cont_normalizer='ss'`.
             with_std: If `True`, scale the data to unit variance (or equivalently, unit standard deviation);
                 used when `cont_normalizer='ss'`.
+            cap: If 'True' the reconstructed data will be capped to their original minimum and maximum values.
         """
         self._cont_normalizer = cont_normalizer
         self._max_clusters = max_clusters
@@ -49,6 +50,7 @@ class DataTransformer(object):
         self._with_std = with_std
         self._column_raw_dtypes = []
         self._column_transform_info_list = []
+        self._cap = cap
 
         self.output_info_list = []
         self.output_dimensions = 0
@@ -93,6 +95,12 @@ class DataTransformer(object):
             cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
                                       column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
+
+        elif self._cont_normalizer == 'none':
+            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=None,
+                                      column_max=max_val, column_min=min_val,
+                                      output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
+
         '''
         elif self._cont_normalizer == 'ss-pca':
             tran = Pipeline([
@@ -176,6 +184,9 @@ class DataTransformer(object):
         elif self._cont_normalizer == 'ss':
             output = column_transform_info.transform.transform(data)
 
+        elif self._cont_normalizer == 'none':
+            return data
+
         return output
 
     def _transform_discrete(self, column_transform_info, data):
@@ -244,6 +255,9 @@ class DataTransformer(object):
 
         elif self._cont_normalizer == 'ss':
             return encoder.inverse_transform(column_data)
+
+        elif self._cont_normalizer == 'none':
+            return column_data
 
     def _inverse_transform_discrete(self, column_transform_info, column_data):
         ohe = column_transform_info.transform

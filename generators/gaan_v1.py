@@ -113,7 +113,7 @@ class GAANv1(BaseGAN):
         self._real_samples_ratio = np.unique(y_clean, return_counts=True)[1]
 
         # (x_clean, y_clean) is the new dataset without the outliers
-        # print("Clean Dataset Shape:", x_clean.shape)
+        print("Clean Dataset Shape:", x_clean.shape)
 
         # ====== 2. Clustering step
         # ====== Use a Gaussian Mixture Model (GMM) to cluster the cleaned samples

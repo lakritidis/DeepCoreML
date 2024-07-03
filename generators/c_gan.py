@@ -168,7 +168,7 @@ class cGAN(BaseGAN):
 
         disc_loss, gen_loss = 0, 0
         for epoch in range(self._epochs):
-            for n, real_data in enumerate(train_dataloader):
+            for real_data in train_dataloader:
                 if real_data.shape[0] > 1:
                     disc_loss, gen_loss = self.train_batch(real_data)
 
@@ -227,7 +227,7 @@ class cGAN(BaseGAN):
         for epoch in range(self._epochs):
 
             # Train the GAN in batches
-            for n, real_data in enumerate(train_dataloader):
+            for real_data in train_dataloader:
                 temp_disc_loss, temp_gen_loss = self.train_batch(real_data)
                 if temp_gen_loss > 0:
                     gen_loss = temp_gen_loss

@@ -1,13 +1,14 @@
 import pandas as pd
 
+import DeepCoreML.paths as paths
+
 
 class ResultHandler:
     def __init__(self, description, cv_results):
         self.description_ = description
         self.cv_results = cv_results
         self.mean_results = []
-        self._base_path = '/media/leo/7CE54B377BB9B18B/dev/Python/swDefect/results/'
-        # self._base_path = 'D:/dev/python/swDefect/results/'
+        self._out_path = paths.output_path_performance
 
     def to_df(self, result_type='folds'):
         # df_columns = ['Classifier', 'Sampler', 'Dataset',
@@ -27,8 +28,7 @@ class ResultHandler:
             scorer = df['Scorer'].unique()
             folds = df['Fold'].unique()
 
-
-            #return df_means
+            # return df_means
 
         return df
 
@@ -64,9 +64,9 @@ class ResultHandler:
 
         # Results in CSV format
         results = self.to_df().sort_values(by=['Dataset', 'Sampler', 'Scorer', 'Fold'])
-        results.to_csv(self._base_path + filename + '_folds.csv')
+        results.to_csv(self._out_path + filename + '_folds.csv')
 
     def record_results_full(self, filename):
         df = self.to_df()
-        df.to_csv(self._base_path + filename + '.csv')
+        df.to_csv(self._out_path + filename + '.csv')
         print(df)

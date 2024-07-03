@@ -8,7 +8,7 @@ from generators.ct_gan import ctGAN
 from generators.gaan_v1 import GAANv1
 from generators.gaan_v2 import GAANv2
 from generators.gaan_v3 import GAANv3
-from generators.gaan_v4 import GAANv4
+from generators.ctd_gan import ctdGAN
 
 from Datasets import BaseDataset
 from DataSamplers import DataSamplers
@@ -33,8 +33,8 @@ def test_model(model, dataset, seed):
 
     """Create, train and test individual generators.
     """
-    dset = BaseDataset(dataset['name'], random_state=seed)
-    dset.load_from_csv(path=dataset['path'], feature_cols=dataset['features_cols'], class_col=dataset['class_col'])
+    dset = BaseDataset('test', random_state=seed)
+    dset.load_from_csv(path=dataset['path'], feature_cols=dataset['feature_cols'], class_col=dataset['class_col'])
     dset.display_params()
 
     x = dset.x_
@@ -48,12 +48,15 @@ def test_model(model, dataset, seed):
         gan = GAANv2(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, random_state=seed)
     elif model == "GAANv3":
         gan = GAANv3(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, random_state=seed)
-    elif model == "CONDITIONAL-GAN":
+    elif model == "CGAN":
         gan = cGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, random_state=seed)
     elif model == "CTGAN":
         gan = ctGAN(discriminator=(256, 256), generator=(128, 256, 128), pac=1)
+    elif model == "CTDGAN":
+        gan = ctdGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, random_state=seed)
     else:
-        gan = GAANv4(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=20, random_state=seed)
+        print("No model specified")
+        exit()
 
     balanced_data = gan.fit_resample(x, y)
     print(balanced_data[0].shape)
@@ -105,7 +108,7 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
         # Load the dataset from the input CSV file
         ds = datasets[key]
         original_dataset = BaseDataset(key, random_state=random_state)
-        original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['features_cols'], class_col=ds['class_col'])
+        original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['feature_cols'], class_col=ds['class_col'])
 
         print("\n=================================\n Evaluating dataset", key, " - shape:", original_dataset.x_.shape)
 
@@ -115,6 +118,7 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
         k = list(metadata.columns.keys())[len(metadata.columns.keys()) - 1]
         for k in metadata.columns.keys():
             metadata.columns[k] = {'sdtype': 'numerical'}
+
         # The last column becomes categorical - This structure is required by the Synth. Data Vault models.
         metadata.columns[k] = {'sdtype': 'categorical'}
 
@@ -236,7 +240,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
         # Load the dataset from the input CSV file
         ds = datasets[key]
         original_dataset = BaseDataset(key, random_state=random_state)
-        original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['features_cols'], class_col=ds['class_col'])
+        original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['feature_cols'], class_col=ds['class_col'])
 
         print("\n=================================\n Evaluating dataset", key, " - shape:", original_dataset.x_.shape)
 
@@ -246,6 +250,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
         k = list(metadata.columns.keys())[len(metadata.columns.keys()) - 1]
         for k in metadata.columns.keys():
             metadata.columns[k] = {'sdtype': 'numerical'}
+
         # The last column becomes categorical - This structure is required by the Synth. Data Vault models.
         metadata.columns[k] = {'sdtype': 'categorical'}
 
@@ -368,7 +373,7 @@ def eval_oversampling_efficacy(datasets, num_threads, random_state):
         reset_random_states(np_random_state, torch_random_state, cuda_random_state)
         ds = datasets[key]
         original_dataset = BaseDataset(key, random_state=random_state)
-        original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['features_cols'], class_col=ds['class_col'])
+        original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['feature_cols'], class_col=ds['class_col'])
 
         dataset_results_list = []
 

@@ -255,7 +255,7 @@ class sbGAN(BaseGAN):
 
         disc_loss, gen_loss = 0, 0
         for epoch in range(self._epochs):
-            for n, real_data in enumerate(train_dataloader):
+            for real_data in train_dataloader:
                 if real_data.shape[0] > 1:
                     disc_loss, gen_loss = self.train_batch(real_data)
 

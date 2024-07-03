@@ -1,6 +1,6 @@
 map_name_to_handle = {
     'bert_en_uncased_L-12_H-768_A-12':
-        'https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/3',
+'https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/3',
     'bert_en_cased_L-12_H-768_A-12':
         'https://tfhub.dev/tensorflow/bert_en_cased_L-12_H-768_A-12/3',
     'bert_multi_cased_L-12_H-768_A-12':
