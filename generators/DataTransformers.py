@@ -1,3 +1,6 @@
+# Data Transformer object
+# Forked and modified from https://github.com/sdv-dev/CTGAN
+
 import numpy as np
 import pandas as pd
 

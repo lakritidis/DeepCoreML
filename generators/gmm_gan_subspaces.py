@@ -1,3 +1,5 @@
+# Experimental: Latent (sub)spaces for GANs
+
 import numpy as np
 
 import torch

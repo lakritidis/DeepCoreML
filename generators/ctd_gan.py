@@ -348,6 +348,7 @@ class ctdGAN(BaseGAN):
         # One-hot encoded clusters and classes:
         latent_classes_ohe = nn.functional.one_hot(latent_classes, num_classes=self._n_classes)
         latent_clusters_ohe = nn.functional.one_hot(latent_clusters, num_classes=self._num_clusters)
+
         return latent_vectors, latent_clusters_ohe, latent_classes_ohe
 
     @staticmethod

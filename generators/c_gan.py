@@ -1,3 +1,8 @@
+# cGAN: Conditional Generative Adversarial Net
+# This model was introduced in the following paper:
+#
+# M. Mirza, S. Osindero, "Conditional Generative Adversarial Nets", arXiv preprint arXiv:1411.1784, 2014.
+
 import numpy as np
 import torch
 import torch.nn as nn

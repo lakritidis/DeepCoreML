@@ -1,4 +1,8 @@
-# Forked from https://github.com/sdv-dev/CTGAN.
+# ctGAN: Conditional Table Generative Adversarial Net - Forked from https://github.com/sdv-dev/CTGAN
+# This model was introduced in the following paper:
+#
+# L. Xu, M. Skoularidou, A. Cuesta-Infante, K. Veeramachaneni, "Modeling Tabular data using Conditional GAN",
+# Advances in Neural Information Processing Systems, vol. 32, 2019.
 
 import warnings
 

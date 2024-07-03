@@ -1,5 +1,6 @@
 # SB-GAN: Safe-Borderline Generative Adversarial Net
 # This generative model was introduced in the following paper:
+#
 # L. Akritidis, A. Fevgas, M. Alamaniotis, P. Bozanis, "Conditional Data Synthesis with Deep Generative Models for
 # Imbalanced Dataset Oversampling", In Proceedings of the 35th IEEE International Conference on Tools with Artificial
 # Intelligence (ICTAI), pp. 444-451, 2023.
