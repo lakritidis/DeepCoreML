@@ -10,7 +10,7 @@ num_threads = 1
 os.environ['OMP_NUM_THREADS'] = str(num_threads)
 np.set_printoptions(linewidth=400, threshold=sys.maxsize)
 
-seed = 1
+seed = 0
 ds_path = paths.dataset_path
 
 datasets_imb = {

@@ -369,7 +369,6 @@ class ctdGAN(BaseGAN):
         fig.savefig(store_losses + "GAN_losses.png")
 
         plt.show()
-
     def generator_loss(self, predicted_labels, real_labels, real_data, latent_data, generated_data):
         """Custom Generator loss
 
@@ -434,7 +433,10 @@ class ctdGAN(BaseGAN):
         # gen_loss = disc_loss + reconstruction_error + clustering_loss
 
         # _dr_loss
-        gen_loss = disc_loss + reconstruction_error
+        # gen_loss = disc_loss + reconstruction_error
+
+        # _d_loss
+        gen_loss = disc_loss
 
         return gen_loss
 

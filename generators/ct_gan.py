@@ -260,8 +260,8 @@ class ctGAN(BaseGAN):
                 else:
                     ed = st + span_info.dim
                     ed_c = st_c + span_info.dim
-                    tmp = nn.functional.cross_entropy(data[:, st:ed], torch.argmax(c[:, st_c:ed_c], dim=1),
-                                                      reduction='none')
+                    tmp = nn.functional.cross_entropy(data[:, st:ed], torch.argmax(c[:, st_c:ed_c], dim=1), reduction='none')
+                    # print("Original: ")
                     loss.append(tmp)
                     st = ed
                     st_c = ed_c
