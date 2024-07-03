@@ -370,7 +370,7 @@ class ctdGAN(BaseGAN):
 
         plt.show()
     def generator_loss(self, predicted_labels, real_labels, real_data, latent_data, generated_data):
-        """Custom Generator loss
+        """Custom Generator loss.
 
         The loss function of the Generator is a linear combination of the Discriminator Loss + Gaussian negative
         log likelihood between the generated samples and the reference Gaussian distribution of the corresponding
