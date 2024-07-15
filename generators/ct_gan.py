@@ -13,8 +13,9 @@ import torch.nn as nn
 
 from sklearn.preprocessing import OneHotEncoder
 
-from .DataTransformers import DataTransformer
-from .gan_discriminators import ctDiscriminator
+from DeepCoreML.TabularTransformer import TabularTransformer
+
+from .gan_discriminators import Critic
 from .gan_generators import ctGenerator
 from .BaseGenerators import BaseGAN
 
@@ -100,9 +101,11 @@ class DataSampler(object):
             return None
 
         discrete_column_id = np.random.choice(np.arange(self._n_discrete_columns), batch_size)
+        # print("self._n_discrete_columns = ", self._n_discrete_columns, "discrete_column_id = ", discrete_column_id)
 
         cond = np.zeros((batch_size, self._n_categories), dtype='float32')
         mask = np.zeros((batch_size, self._n_discrete_columns), dtype='float32')
+        # print("cond = ", cond, ", mask = ", mask)
         mask[np.arange(batch_size), discrete_column_id] = 1
         category_id_in_col = self._random_choice_prob_index(discrete_column_id)
         category_id = (self._discrete_column_cond_st[discrete_column_id] + category_id_in_col)
@@ -260,7 +263,11 @@ class ctGAN(BaseGAN):
                 else:
                     ed = st + span_info.dim
                     ed_c = st_c + span_info.dim
+                    # print("Start:", st, ", End: ", ed, ", Data:", data[:, st:ed])
+                    # print("Start_Col:", st_c, ", End_Col: ", ed_c, ", CondVec:", c[:, st_c:ed_c])
                     tmp = nn.functional.cross_entropy(data[:, st:ed], torch.argmax(c[:, st_c:ed_c], dim=1), reduction='none')
+                    # print("Temp=", tmp)
+                    a = input('').split(" ")[0]
                     # print("Original: ")
                     loss.append(tmp)
                     st = ed
@@ -314,7 +321,7 @@ class ctGAN(BaseGAN):
             warnings.warn(('`epochs` argument in `fit` method has been deprecated and will be removed '
                            'in a future version. Please pass `epochs` to the constructor instead'), DeprecationWarning)
 
-        self._transformer = DataTransformer(cont_normalizer='gm')
+        self._transformer = TabularTransformer(cont_normalizer='gm')
         self._transformer.fit(train_data, discrete_columns)
 
         # print(self._transformer._column_transform_info_list)
@@ -328,14 +335,12 @@ class ctGAN(BaseGAN):
 
         data_dim = self._transformer.output_dimensions
 
-        # CtGAN components: ctGenerator & ctDiscriminator
+        # CtGAN components: ctGenerator & Critic
         self.G_ = ctGenerator(self.embedding_dim_ + self._data_sampler.dim_cond_vec(), self.G_Arch_,
                               data_dim).to(self._device)
-        # self.D_ = PackedDiscriminator(self.D_Arch_, input_dim=data_dim + self._data_sampler.dim_cond_vec(),
-        #                              pac=self.pac_, p=0.5, negative_slope=0.2).to(self._device)
 
-        self.D_ = ctDiscriminator(data_dim + self._data_sampler.dim_cond_vec(), self.D_Arch_,
-                                  pac=self.pac_).to(self._device)
+        self.D_ = Critic(data_dim + self._data_sampler.dim_cond_vec(), self.D_Arch_,
+                         pac=self.pac_).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
                                              lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
@@ -364,6 +369,7 @@ class ctGAN(BaseGAN):
                         m1 = torch.from_numpy(m1).to(self._device)
                         fakez = torch.cat([fakez, c1], dim=1)
 
+                        print("c1=", c1, ", m1=", m1, ", col=", col, "opt=", opt)
                         perm = np.arange(self._batch_size)
                         np.random.shuffle(perm)
                         real = self._data_sampler.sample_data(self._batch_size, col[perm], opt[perm])

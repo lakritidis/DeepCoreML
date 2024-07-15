@@ -3,7 +3,7 @@ import numpy as np
 
 from sklearn.preprocessing import LabelEncoder
 
-from Datasets import BaseDataset
+from Dataset import BaseDataset
 from TextPreprocessor import TextPreprocessor
 
 

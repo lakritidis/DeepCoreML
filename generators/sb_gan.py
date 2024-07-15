@@ -13,7 +13,8 @@ from torch.utils.data import DataLoader
 
 from sklearn.neighbors import KDTree
 
-from .DataTransformers import DataTransformer
+from DeepCoreML.TabularTransformer import TabularTransformer
+
 from .gan_discriminators import PackedDiscriminator
 from .gan_generators import Generator
 from .BaseGenerators import BaseGAN
@@ -54,7 +55,7 @@ class sbGAN(BaseGAN):
             k: The number of nearest neighbors to retrieve; applied when `method='knn'`.
             r: The radius of the hypersphere that includes the neighboring samples; applied when `method='rad'`.
             sampling_strategy: How the model generates data.
-            random_state: An integer for seeding the involved random number generators.
+            random_state (int): Seed the random number generators. Use the same value for reproducible results.
         """
         super().__init__(embedding_dim, discriminator, generator, pac, g_activation, adaptive, epochs, batch_size,
                          lr, decay, sampling_strategy, random_state)
@@ -235,7 +236,7 @@ class sbGAN(BaseGAN):
         factor = self._batch_size // self.pac_
         batch_size = factor * self.pac_
 
-        self._transformer = DataTransformer(cont_normalizer='ss')
+        self._transformer = TabularTransformer(cont_normalizer='ss')
         self._transformer.fit(x_train)
         x_train = self._transformer.transform(x_train)
 

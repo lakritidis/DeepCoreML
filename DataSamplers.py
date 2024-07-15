@@ -128,12 +128,7 @@ class DataSamplers:
         act = 'tanh'
 
         # Experimental over-samplers.
-        self.over_samplers_ = (
-            BaseSampler("ctdGAN", "ctdGAN",
-                        ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-                               g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
-                               projector=None, random_state=random_state)),
-
+        self.over_samplers_exp = (
             # BaseSampler("Cluster GAN-Uniform", "ClusterGAN-Uni",
             #            GAANv1(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
             #                       g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
@@ -156,7 +151,7 @@ class DataSamplers:
         )
 
         # All over-samplers.
-        self.over_samplers_all_ = (
+        self.over_samplers_ = (
             BaseSampler("None", "None", None),
 
             BaseSampler("Random Oversampling", "ROS",
@@ -203,32 +198,12 @@ class DataSamplers:
             BaseSampler("CTGAN", "CTGAN",
                         CTGANSynthesizer(
                             metadata, enforce_min_max_values=False, enforce_rounding=False, epochs=epochs,
-                            verbose=False))
+                            verbose=False)),
 
-            # BaseSampler("GAAN", "GAAN",
-            #            GAANv4(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-            #                   g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
-            #                   projector=None, random_state=random_state)),
-
-            # BaseSampler("Cluster GAN-Uniform", "ClusterGAN-Uni",
-            #            GAANv1(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-            #                       g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
-            #                       cond_vector='uniform', projector=None, random_state=random_state)),
-
-            # BaseSampler("Cluster GAN-Probabilistic", "ClusterGAN-Prob",
-            #            GAANv1(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-            #                       g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
-            #                       cond_vector='prob', projector=None, random_state=random_state)),
-
-            # BaseSampler("GMM GAN", "GMM-GAN",
-            #            GAANv2(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-            #                   g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
-            #                   projector=None, random_state=random_state)),
-
-            # BaseSampler("GAAN", "GAAN",
-            #            GAANv3(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-            #                   g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
-            #                   projector=None, random_state=random_state)),
+            BaseSampler("ctdGAN", "ctdGAN",
+                        ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, batch_size=batch_size,
+                               epochs=epochs, pac=pac, max_clusters=max_clusters, projector=None,
+                               random_state=random_state)),
         )
 
         self.over_samplers_sdv_ = (

@@ -23,10 +23,10 @@ class CentroidSampler:
     randomly, in a point over the line that connects each point and the corresponding centroid.
 
     Args:
-        sampling_strategy: How the algorithm generates samples:
-          - 'auto': the model balances the dataset by oversampling the minority classes.
-          - dict: a dictionary that indicates the number of samples to be generated from each class.
+        sampling_strategy (string or dictionary): How the algorithm generates samples:
 
+          * 'auto': the model balances the dataset by oversampling the minority classes.
+          * dict: a dictionary that indicates the number of samples to be generated from each class.
     """
     def __init__(self, sampling_strategy='auto', random_state=0):
         self._n_samples = 0
@@ -129,21 +129,22 @@ class CBR(BaseGenerator):
     def __init__(self, cluster_estimator='hac', cluster_resampler='cs', verbose=True, k_neighbors=1,
                  min_distance_factor=3, sampling_strategy='auto', random_state=0):
         """
-        Initialize a Cluster-Based Over-sampler.
+        Initialize a Cluster-Based Resampler (CBR).
 
         Args:
-            cluster_estimator: The clustering algorithm to be applied at the dataset. Values:
+            cluster_estimator (string): The clustering algorithm to be applied at the dataset. Values:
 
                 * `hac` (default): Hierarchical Agglomerative Clustering.
                 * `dbscan`: DBSCAN.
-
-            cluster_resampler: The over-sampling algorithm to be applied at each cluster. Values:
+            cluster_resampler (string): The over-sampling algorithm to be applied at each cluster. Values:
 
                 * `cs` (default): Centroid Sampler (implemented above)
                 * `smote`: Synthetic Minority Oversampling Technique (SMOTE) - requires the `imblearn` library.
+            verbose (bool): Print messages during execution.
+            sampling_strategy (string or dictionary): How the algorithm generates samples:
 
-            verbose: Print messages during execution.
-            sampling_strategy: How the algorithm generates data.
+                * 'auto': the model balances the dataset by oversampling the minority classes.
+                * dict: a dictionary that indicates the number of samples to be generated from each class.
             k_neighbors: Hyper-parameter for `cluster_resampler='smote'`.
             min_distance_factor: Regulate the minimum distance for cluster merging in HAC. Decrease that value to
                 increase the minimum allowed distance for cluster merging (fewer, yet larger clusters will be created).
@@ -215,6 +216,18 @@ class CBR(BaseGenerator):
         return clustering_method.labels_
 
     def fit_resample(self, x_in, y_in):
+        """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. The function renders CBR
+        compatible with the `imblearn`'s interface, allowing its usage in over-sampling/under-sampling pipelines.
+
+        Args:
+            x_in (2D NumPy array): The training data instances.
+            y_in (1D NumPy array): The classes of the training data instances.
+
+        Returns:
+
+            * The training data instances + the generated data instances.
+            * The classes of the training data instances + the classes of the generated data instances.
+        """
 
         self._fit(x_in, y_in)
         cluster_labels = self._perform_clustering(x_in)

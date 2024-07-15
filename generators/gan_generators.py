@@ -98,23 +98,3 @@ class ctGenerator(nn.Module):
         """Apply the Generator to the `input_`."""
         data = self.seq(input_)
         return data
-
-
-class Generator2(nn.Module):
-    """Generator with Residual blocks and fixed activation function for the output layer"""
-
-    def __init__(self, embedding_dim, architecture, data_dim):
-        super().__init__()
-        dim = embedding_dim
-        seq = []
-        for item in list(architecture):
-            seq += [Residual(dim, item)]
-            dim += item
-        # seq.append(nn.Linear(dim, data_dim))
-        seq += [nn.Linear(dim, data_dim), nn.Tanh()]
-        self.seq = nn.Sequential(*seq)
-
-    def forward(self, input_):
-        """Apply the Generator to the `input_`."""
-        data = self.seq(input_)
-        return data

@@ -3,6 +3,7 @@ from sklearn.neural_network import MLPClassifier
 # from sklearn.tree import DecisionTreeClassifier
 # from sklearn.linear_model import LogisticRegression
 # from sklearn.ensemble import RandomForestClassifier
+# import xgboost as xgb
 
 
 class BaseClassifier:
@@ -37,5 +38,7 @@ class Classifiers:
             BaseClassifier("Multilayer Perceptron", "MLP",
                            MLPClassifier(activation='relu', hidden_layer_sizes=(128, 128), solver='adam', max_iter=300,
                                          random_state=random_state)),
+            # BaseClassifier("XGBoost", "XGBoost", xgb.XGBClassifier()),
         )
+
         self.num_classifiers_ = len(self.models_)

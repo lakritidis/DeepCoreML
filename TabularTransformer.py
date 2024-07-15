@@ -1,4 +1,4 @@
-# Data Transformer object
+# Tabular Transformer object: based on the Data Transformer of ctGAN
 # Forked and modified from https://github.com/sdv-dev/CTGAN
 
 import numpy as np
@@ -19,19 +19,20 @@ ColumnTransformInfo = namedtuple(
 )
 
 
-class DataTransformer(object):
+class TabularTransformer(object):
     """Data Transformer.
 
     Model continuous columns with a BayesianGMM and normalized to a scalar [0, 1] and a vector.
     Discrete columns are encoded using a scikit-learn OneHotEncoder.
     """
     def __init__(self, cont_normalizer='gm', max_clusters=10, weight_threshold=0.005, with_mean=True, with_std=True,
-                 cap=False):
+                 clip=False):
         """Create a data transformer.
 
         Args:
             cont_normalizer: Normalizer for the continuous columns:
 
+             * 'none': Do not apply a transformation in the continuous columns.
              * 'gmo': Bayesian Gaussian Mixture.
              * 'gm': Bayesian Gaussian Mixture + One-hot-encoded component labels.
              * 'ss': A typical Standard scaler.
@@ -44,7 +45,7 @@ class DataTransformer(object):
                 common use cases is likely to be too large to fit in memory; used when `cont_normalizer='ss'`.
             with_std: If `True`, scale the data to unit variance (or equivalently, unit standard deviation);
                 used when `cont_normalizer='ss'`.
-            cap: If 'True' the reconstructed data will be capped to their original minimum and maximum values.
+            clip: If 'True' the reconstructed data will be clipped to their original minimum and maximum values.
         """
         self._cont_normalizer = cont_normalizer
         self._max_clusters = max_clusters
@@ -53,7 +54,7 @@ class DataTransformer(object):
         self._with_std = with_std
         self._column_raw_dtypes = []
         self._column_transform_info_list = []
-        self._cap = cap
+        self._clip = clip
 
         self.output_info_list = []
         self.output_dimensions = 0
@@ -245,6 +246,7 @@ class DataTransformer(object):
         return np.concatenate(column_data_list, axis=1).astype(float)
 
     def _inverse_transform_continuous(self, column_transform_info, column_data, sigmas, st):
+        ret_data = None
         encoder = column_transform_info.transform
 
         if self._cont_normalizer == 'gm':
@@ -254,13 +256,19 @@ class DataTransformer(object):
                 selected_normalized_value = np.random.normal(data.iloc[:, 0], sigmas[st])
                 data.iloc[:, 0] = selected_normalized_value
 
-            return encoder.reverse_transform(data)
+            ret_data = encoder.reverse_transform(data)
 
         elif self._cont_normalizer == 'ss':
-            return encoder.inverse_transform(column_data)
+            ret_data = encoder.inverse_transform(column_data)
 
         elif self._cont_normalizer == 'none':
-            return column_data
+            ret_data = column_data
+
+        # Apply value clipping here: Given an interval, values outside the interval are clipped to the interval edges.
+        if self._clip:
+            ret_data = np.clip(ret_data, column_transform_info.column_min, column_transform_info.column_max)
+
+        return ret_data
 
     def _inverse_transform_discrete(self, column_transform_info, column_data):
         ohe = column_transform_info.transform
@@ -321,3 +329,4 @@ class DataTransformer(object):
             'column_id': column_id,
             'value_id': np.argmax(one_hot)
         }
+

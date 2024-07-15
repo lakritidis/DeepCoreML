@@ -8,17 +8,20 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
 from sklearn.datasets import make_classification
 from sklearn.model_selection import cross_validate
 from sklearn.metrics import make_scorer
 from sklearn.metrics import f1_score, accuracy_score, balanced_accuracy_score, precision_score, recall_score
 from imblearn.metrics import sensitivity_score, specificity_score
 
+from Dataset import Dataset
+
 import warnings
+
 warnings.filterwarnings("ignore")
 
-pd.set_option('display.max_rows', 100)
+pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', 400)
@@ -26,134 +29,150 @@ pd.set_option('display.max_colwidth', 400)
 
 # #################################################################################################################
 # DATASET BASE CLASS
-class BaseDataset:
-    def __init__(self, name, random_state=0):
+class TabularDataset(Dataset):
+    def __init__(self, name, categorical_columns=None, class_column=None, random_state=0):
         """
-        Dataset initializer: BaseDataset is the base class of all dataset subclasses.
+        Tabular Dataset initializer
 
         Args:
+            name (string): the name of the tabular dataset
+            categorical_columns (List or Tuple): A list or tuple with the indices of the categorical columns (if any).
+            class_column (int): The index of the column that stores the class of the sample (if any).
             random_state: Controls random number generation. Set this to a fixed integer to get reproducible results.
         """
-        self._name = name
-        self._random_state = random_state
-        self._dimensionality = 0
-        self._num_classes = 0
-        self._num_samples = 0
+        super().__init__(name, class_column, random_state)
 
-        self._feature_columns = 0
-        self._class_column = 0
-        self._class_column_name = ''
+        # Raw dataset dimensions - (rows, columns)
+        self.num_rows = 0
+        self.num_columns = 0
 
-        self.x_ = None
-        self.y_ = None
-        self.tags_ = None
+        # Dimensionality is NOT equal to the number of columns.
+        # e.g. a single categorical column may have multiple dimensions if one-hot-encoded
+        self.dimensionality = 0
+
+        # The raw Dataframe
+        self._raw_df = None
+
+        # The Dataframe after some processing (will be used for training)
         self.df_ = None
 
+        # Create one LabelEncoder object for each categorical column
+        if categorical_columns is None:
+            self.categorical_columns = None
+        else:
+            self.categorical_columns = list(categorical_columns)
+            self._label_encoders = [OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+                                    for _ in range(len(self.categorical_columns))]
+
+        self._class_encoder = LabelEncoder()
+        self.x_ = None
+        self.y_ = None
+
     # Create synthetic imbalanced datasets with numeric features
-    def create_synthetic(self, n_samples=1000, n_classes=2, imb_ratio=(0.5, 0.5)):
+    def create_synthetic(self, num_samples=1000, num_classes=2, imb_ratio=(0.5, 0.5)):
         """
         Create a synthetic imbalanced dataset with numeric features.
 
         Args:
-            n_samples: how many data instances to create.
-            n_classes: the number of classes of the synthetic data instances.
+            num_samples: how many data instances to create.
+            num_classes: the number of classes of the synthetic data instances.
             imb_ratio: the imbalance ratio of the data (it must be a tuple comprising n_classes elements with sum=1).
-        """ 
+        """
         synthetic_dataset = []
-        if n_classes == 2:
+        if num_classes == 2:
             synthetic_dataset = make_classification(
-                n_samples=n_samples, n_features=2, n_clusters_per_class=1, flip_y=0, n_classes=2, weights=imb_ratio,
+                n_samples=num_samples, n_features=2, n_clusters_per_class=1, flip_y=0, n_classes=2, weights=imb_ratio,
                 class_sep=0.5, n_informative=2, n_redundant=0, n_repeated=0, random_state=self._random_state)
 
-        elif n_classes == 4:
+        elif num_classes == 4:
             synthetic_dataset = make_classification(
-                n_samples=n_samples, n_features=2, n_clusters_per_class=1, flip_y=0, n_classes=4, weights=imb_ratio,
+                n_samples=num_samples, n_features=2, n_clusters_per_class=1, flip_y=0, n_classes=4, weights=imb_ratio,
                 class_sep=1.0, n_informative=2, n_redundant=0, n_repeated=0, random_state=self._random_state)
 
-        self._feature_columns = 0
-        self._class_column = 1
+        self.class_column = 1
+        self.num_rows = num_samples
+        self.num_classes = num_classes
 
-        self.x_ = synthetic_dataset[0]
-        self.y_ = synthetic_dataset[1]
+        x = synthetic_dataset[0]
+        y = synthetic_dataset[1]
 
-        self._num_classes = n_classes
-        self._num_samples = n_samples
-        self._dimensionality = self.x_.shape[1]
+        self.num_rows = num_samples
+        self.num_columns = self.dimensionality = x.shape[1]
 
-        print("Num Samples:", self._num_samples, "\nClass Distribution:")
-        for k in range(self._num_classes):
-            print("\tClass", k, ":", len(self.y_[self.y_ == k]), "samples")
+        print("Num Samples:", self.num_rows, "\nClass Distribution:")
+        for k in range(self.num_classes):
+            print("\tClass", k, ":", len(y[y == k]), "samples")
 
     # Load a dataset from an external CSV file
-    def load_from_csv(self, path='', feature_cols=range(0, 1), class_col=1):
+    def load_from_csv(self, path=''):
         """
         Load a Dataset from a CSV file and compute several basic statistics (number of samples, number of classes,
         input dimensionality). The target variables are Label Encoded.
 
         Args:
             path: The location of the input CSV file.
-            feature_cols: A tuple the denotes the indices of the columns with the input variables.
-            class_col: The integer index of the column that stores the target variables.
         """
-        self._feature_columns = feature_cols
-        self._class_column = class_col
-
         file_extension = pathlib.Path(path).suffix
         if file_extension == '.csv':
-            input_df = pd.read_csv(path, encoding='utf-8', keep_default_na=True, na_values=['<null>'])
-            # self.df_ = pd.read_csv(path, encoding='latin-1', header=None)
+            self._raw_df = pd.read_csv(path, encoding='utf-8', keep_default_na=True, na_values=['<null>'])
         else:
-            input_df = self.get_df(path)
+            self._raw_df = self.get_df(path)
 
-        # The class column must be the last one.
-        self._class_column_name = input_df.columns[len(input_df.columns) - 1]
+        # Preprocessing steps:
+        # Step 1: Remove rows with missing values.
+        self.df_ = self._raw_df.dropna(inplace=False)
+        self.df_.reset_index(drop=True, inplace=True)
 
-        # Remove rows with missing values
-        input_df.dropna(inplace=True)
-        input_df.reset_index(drop=True, inplace=True)
+        # Step 2: Shuffle the dataframe
+        self.df_.sample(frac=1)
 
-        # Shuffle the dataframe
-        input_df.sample(frac=1)
+        self.num_rows = self.df_.shape[0]
+        self.num_columns = self.df_.shape[1]
 
-        input_x = input_df.iloc[:, feature_cols]
-        input_y = input_df.iloc[:, class_col]
+        # Step 3: If a class column exists, put it in the end
+        if self.class_column is not None:
+            if self.class_column < self.num_columns - 1:
+                df_class = self.df_.iloc[:, self.class_column]
+                self.df_.drop(self.df_.columns[self.class_column], axis=1, inplace=True)
 
-        # Process the input vectors and place them to self.x_
-        self.x_ = input_x.to_numpy()
-        self.df_ = input_x
+                self.df_ = pd.concat([self.df_, df_class], axis=1)
 
-        # Label encode the target variables
-        class_encoder = LabelEncoder()
-        self.y_ = class_encoder.fit_transform(input_y.to_numpy())
+                # Adjust the indices of the categorical columns
+                if self.categorical_columns is not None:
+                    for col in range(len(self.categorical_columns)):
+                        if self.categorical_columns[col] > self.class_column:
+                            self.categorical_columns[col] -= 1
 
-        # Copy the label encoded class column to the Dataframe
-        self.df_[self._class_column_name] = self.y_
+                self.class_column = self.num_columns - 1
+
+        # Step 4: Change the name of the Dataframe columns
+        self.df_.columns = [str(c) for c in range(self.num_columns)]
+
+        # Step 5: Fit_transform the label encoders
+        if self.categorical_columns is not None:
+            for c in range(len(self.categorical_columns)):
+                col = str(self.categorical_columns[c])
+                self.df_[col] = self._label_encoders[c].fit_transform(self.df_[col])
+
+        # Step 6: Label Encode the class labels
+        self.df_[str(self.class_column)] = self._class_encoder.fit_transform(self.df_[str(self.class_column)])
+
+        self.x_ = self.df_.iloc[:, 0:self.class_column].to_numpy()
+        self.y_ = self.df_.iloc[:, self.class_column].to_numpy()
 
         # Useful quick reference statistics
-        self._num_classes = len(self.df_.iloc[:, class_col].unique())
-        self._num_samples = self.x_.shape[0]
-        self._dimensionality = self.x_.shape[1]
-
-    def get_dimensionality(self):
-        return self._dimensionality
-
-    def get_num_samples(self):
-        return self._num_samples
-
-    def get_num_classes(self):
-        return self._num_classes
-
-    def get_class_column(self):
-        return self._class_column
+        self.num_classes = len(self.df_.iloc[:, self.class_column].unique())
+        self.dimensionality = self.x_.shape[1]
 
     # Display the basic dataset parameters
     def display_params(self):
         """
         Display the basic dataset parameters.
         """
-        print("Num Samples:", self._num_samples, "- Dimensions:", self._dimensionality)
-        print("Classes:", self._num_classes, "- Class Distribution:")
-        for k in range(self._num_classes):
+        print("Num Rows:", self.num_rows, ", Num Columns:", self.num_rows)
+        print("\nEncoded data Dimensions:", self.dimensionality)
+        print("Classes:", self.num_classes, "- Class Distribution:")
+        for k in range(self.num_classes):
             print("\tClass", k, ":", len(self.y_[self.y_ == k]), "samples")
 
     def plot(self, dim1=0, dim2=1):
@@ -200,7 +219,7 @@ class BaseDataset:
         results_list = []
         for key in cv_results.keys():
             for f in range(num_folds):
-                lst = [self._name, f+1,  sampler_str, classifier_str, key, cv_results[key][f]]
+                lst = [self._name, f + 1, sampler_str, classifier_str, key, cv_results[key][f]]
                 results_list.append(lst)
 
         cv_results['dataset'] = self._name
@@ -256,7 +275,7 @@ class BaseDataset:
         y_balanced = np.copy(y_in)
 
         # Perform oversampling
-        for cls in range(self._num_classes):
+        for cls in range(self.num_classes):
             if cls != majority_class:
                 samples_to_generate = num_majority_samples - gen_samples_ratio[cls]
 
@@ -265,9 +284,9 @@ class BaseDataset:
                 # Generate the appropriate number of samples to equalize cls with the majority class.
                 # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
                 if sampler.short_name_ == "GCOP" or sampler.short_name_ == "CTGAN" or sampler.short_name_ == "TVAE":
-                    reference_data = pd.DataFrame(data={self._class_column_name: [cls] * samples_to_generate})
+                    reference_data = pd.DataFrame(data={str(self.class_column): [cls] * samples_to_generate})
                     generated_samples = sampler.sampler_.sample_remaining_columns(
-                        max_tries_per_batch=500, known_columns=reference_data).iloc[:, 0:self._dimensionality]
+                        max_tries_per_batch=500, known_columns=reference_data).iloc[:, 0:self.dimensionality]
 
                 elif sampler.short_name_ == "GAAN":
                     generated_samples = sampler.sampler_.sample(samples_to_generate, cls)
@@ -297,7 +316,8 @@ class BaseDataset:
             i += 1
         return pd.DataFrame.from_dict(df, orient='index')
 
-    def parse(self, path):
+    @staticmethod
+    def parse(path):
         g = gzip.open(path, 'rb')
         for lt in g:
             yield json.loads(lt)

@@ -129,7 +129,7 @@ class PackedDiscriminator(nn.Module):
         return self._model(x.view(-1, self._pac_dim))
 
 
-class ctDiscriminator(nn.Module):
+class Critic(nn.Module):
     """Discriminator for ctGAN."""
 
     def __init__(self, input_dim, discriminator_dim, pac=10):

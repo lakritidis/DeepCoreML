@@ -10,7 +10,7 @@ from generators.gaan_v2 import GAANv2
 from generators.gaan_v3 import GAANv3
 from generators.ctd_gan import ctdGAN
 
-from Datasets import BaseDataset
+from TabularDataset import TabularDataset
 from DataSamplers import DataSamplers
 from DataTools import set_random_states, get_random_states, reset_random_states
 from ResultHandler import ResultHandler
@@ -33,8 +33,8 @@ def test_model(model, dataset, seed):
 
     """Create, train and test individual generators.
     """
-    dset = BaseDataset('test', random_state=seed)
-    dset.load_from_csv(path=dataset['path'], feature_cols=dataset['feature_cols'], class_col=dataset['class_col'])
+    dset = TabularDataset('test', class_column=dataset['class_col'], random_state=seed)
+    dset.load_from_csv(path=dataset['path'])
     dset.display_params()
 
     x = dset.x_
@@ -53,7 +53,8 @@ def test_model(model, dataset, seed):
     elif model == "CTGAN":
         gan = ctGAN(discriminator=(256, 256), generator=(128, 256, 128), pac=1)
     elif model == "CTDGAN":
-        gan = ctdGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, random_state=seed)
+        gan = ctdGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, epochs=300,
+                     random_state=seed)
     else:
         print("No model specified")
         exit()
@@ -107,8 +108,8 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
 
         # Load the dataset from the input CSV file
         ds = datasets[key]
-        original_dataset = BaseDataset(key, random_state=random_state)
-        original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['feature_cols'], class_col=ds['class_col'])
+        original_dataset = TabularDataset(key, class_column=ds['class_col'], random_state=random_state)
+        original_dataset.load_from_csv(path=ds['path'])
 
         print("\n=================================\n Evaluating dataset", key, " - shape:", original_dataset.x_.shape)
 
@@ -119,7 +120,7 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
         for k in metadata.columns.keys():
             metadata.columns[k] = {'sdtype': 'numerical'}
 
-        # The last column becomes categorical - This structure is required by the Synth. Data Vault models.
+        # The last column becomes categorical - This structure is required by the SDV models.
         metadata.columns[k] = {'sdtype': 'categorical'}
 
         # Apply k-fold cross validation
@@ -239,8 +240,8 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
 
         # Load the dataset from the input CSV file
         ds = datasets[key]
-        original_dataset = BaseDataset(key, random_state=random_state)
-        original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['feature_cols'], class_col=ds['class_col'])
+        original_dataset = TabularDataset(key, random_state=random_state)
+        original_dataset.load_from_csv(path=ds['path'])
 
         print("\n=================================\n Evaluating dataset", key, " - shape:", original_dataset.x_.shape)
 
@@ -260,10 +261,10 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
         res_dict = dict(zip(unique, 2 * counts))
         samplers = DataSamplers(metadata, sampling_strategy=res_dict, random_state=random_state)
 
-        real_labels = np.ones(original_dataset.get_num_samples())
+        real_labels = np.ones(original_dataset.num_rows)
 
         # For each sampler
-        all_train_idx = [*range(original_dataset.get_num_samples())]
+        all_train_idx = [*range(original_dataset.num_rows)]
 
         for sampler in samplers.over_samplers_:
             if sampler.short_name_ != 'None':
@@ -279,7 +280,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
                 # Although we require from the oversampling method to generate an equal number of samples as those
                 # included in the original dataset, several of them (e.g. K-Means SMOTE) may return more. So we
                 # must create as many fake labels as the number of generated samples.
-                num_generated_samples = y_resampled.shape[0] - original_dataset.get_num_samples()
+                num_generated_samples = y_resampled.shape[0] - original_dataset.num_rows
                 fake_labels = np.zeros(num_generated_samples)
                 real_fake_labels = np.concatenate((real_labels, fake_labels), axis=0)
 
@@ -335,7 +336,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
 # This function uses an ImbLearn Pipeline. Each Oversampling/Under-sampling method MUST support the fit_resample method
 # To use plug-and-play implementations that do not implement fit_resample, please use eval_resampling.
 # This method has been used in the experiments of the paper:
-# L. Aritidis, P. Bozanis, "A Clustering-Based Resampling Technique with Cluster Structure Analysis for Software Defect
+# L. Akritidis, P. Bozanis, "A Clustering-Based Resampling Technique with Cluster Structure Analysis for Software Defect
 # Detection in Imbalanced Datasets", Information Sciences, vol. 674, pp. 120724, 2024.
 def eval_oversampling_efficacy(datasets, num_threads, random_state):
     """Test the ability of a Generator to improve the performance of a classifier by balancing an imbalanced dataset.
@@ -344,7 +345,7 @@ def eval_oversampling_efficacy(datasets, num_threads, random_state):
     method. To use plug-and-play implementations that do not implement fit_resample, please use eval_resampling.
     This method has been used in the experiments of the paper:
 
-    * L. Aritidis, P. Bozanis, "A Clustering-Based Resampling Technique with Cluster Structure Analysis for Software
+    * L. Akritidis, P. Bozanis, "A Clustering-Based Resampling Technique with Cluster Structure Analysis for Software
       Defect Detection in Imbalanced Datasets", Information Sciences, vol. 674, pp. 120724, 2024.
 
     * Algorithm:
@@ -372,8 +373,8 @@ def eval_oversampling_efficacy(datasets, num_threads, random_state):
         print("\n=================================\n Evaluating dataset", key, "\n=================================\n")
         reset_random_states(np_random_state, torch_random_state, cuda_random_state)
         ds = datasets[key]
-        original_dataset = BaseDataset(key, random_state=random_state)
-        original_dataset.load_from_csv(path=ds['path'], feature_cols=ds['feature_cols'], class_col=ds['class_col'])
+        original_dataset = TabularDataset(key, random_state=random_state)
+        original_dataset.load_from_csv(path=ds['path'])
 
         dataset_results_list = []
 
@@ -382,7 +383,7 @@ def eval_oversampling_efficacy(datasets, num_threads, random_state):
         metadata.detect_from_dataframe(original_dataset.df_)
         for k in metadata.columns.keys():
             metadata.columns[k] = {'sdtype': 'numerical'}
-        metadata.columns[original_dataset.get_class_column() - 1] = {'sdtype': 'categorical'}
+        metadata.columns[original_dataset.class_column - 1] = {'sdtype': 'categorical'}
 
         # For each classifier
         for clf in classifiers.models_:

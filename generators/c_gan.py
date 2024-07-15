@@ -11,44 +11,46 @@ from torch.utils.data import DataLoader
 
 from sklearn.metrics import accuracy_score
 
-from .DataTransformers import DataTransformer
+from DeepCoreML.TabularTransformer import TabularTransformer
 from .gan_discriminators import PackedDiscriminator
 from .gan_generators import Generator
 from .BaseGenerators import BaseGAN
 
 
 class cGAN(BaseGAN):
-    """Conditional GAN
+    """Conditional GAN (cGAN)
 
-    Conditional GANs (cGANs) conditionally generate data from a specific class. They are trained
-    by providing both the Generator and the Discriminator the input feature vectors concatenated
-    with their respective one-hot-encoded class labels.
+    Conditional GANs conditionally generate data from a specific class. They are trained by providing both the Generator
+    and the Discriminator the input feature vectors concatenated with their respective one-hot-encoded class labels.
 
-    A Packed Conditional GAN (Pac cGAN) is a cGAN that accepts input samples in packs. Pac cGAN
-    uses a Packed Discriminator to prevent the model from mode collapsing.
+    A Packed Conditional GAN (Pac cGAN) is a cGAN that accepts input samples in packs. Pac cGAN uses a Packed
+    Discriminator to prevent the model from mode collapsing.
     """
 
-    def __init__(self, embedding_dim=128, discriminator=(128, 128), generator=(256, 256), pac=10, g_activation='tanh',
-                 adaptive=False, epochs=300, batch_size=32, lr=2e-4, decay=1e-6, sampling_strategy='auto',
+    def __init__(self, embedding_dim=128, discriminator=(128, 128), generator=(256, 256), epochs=300, batch_size=32,
+                 pac=10, lr=2e-4, decay=1e-6, g_activation='tanh', adaptive=False, sampling_strategy='auto',
                  random_state=0):
 
         """Initializes a Packed Conditional GAN.
 
         Args:
-            embedding_dim: Size of the random sample passed to the Generator.
-            discriminator: a tuple with number of neurons in each fully connected layer of the Discriminator. Each
-                number determines the dimensionality of the output of each layer.
-            generator: a tuple with number of neurons in each fully connected layer of the Generator. Each number
-                determines the dimensionality of the output of each residual block of the Generator.
-            pac: Number of samples to group together when applying the discriminator.
-            g_activation: The activation function of the Generator's output layer.
-            adaptive: boolean value to enable/disable adaptive training.
-            epochs: Number of training epochs.
-            batch_size: Number of data instances per training batch.
-            lr: Learning rate parameter for the Generator/Discriminator Adam optimizers.
-            decay: Weight decay parameter for the Generator/Discriminator Adam optimizers.
-            sampling_strategy: How the model generates data.
-            random_state: An integer for seeding the involved random number generators.
+            embedding_dim (int): Size of the random sample passed to the Generator.
+            discriminator (tuple): a tuple with number of neurons for each fully connected layer of the model's Critic.
+                It determines the dimensionality of the output of each layer.
+            generator (tuple): a tuple with number of neurons for each fully connected layer of the model's Generator.
+                It determines the dimensionality of the output of each residual block of the Generator.
+            epochs (int): The number of training epochs.
+            batch_size (int): The number of data instances per training batch.
+            pac (int): The number of samples to group together when applying the Critic.
+            lr (real): The value of the learning rate parameter for the Generator/Critic Adam optimizers.
+            decay (real): The value of the weight decay parameter for the Generator/Critic Adam optimizers.
+            g_activation (string): The activation function for the Generator's output layer.
+            adaptive (bool): A flag that triggers adaptive training (experimental).
+            sampling_strategy (string or dictionary): How the algorithm generates samples:
+
+              * 'auto': the model balances the dataset by oversampling the minority classes.
+              * dict: a dictionary that indicates the number of samples to be generated from each class.
+            random_state (int): Seed the random number generators. Use the same value for reproducible results.
         """
         super().__init__(embedding_dim, discriminator, generator, pac, g_activation, adaptive, epochs, batch_size,
                          lr, decay, sampling_strategy, random_state)
@@ -59,7 +61,8 @@ class cGAN(BaseGAN):
         optimizers and back propagation.
 
         Args:
-            real_data: data for cGAN training: a batch of concatenated sample vectors + one-hot-encoded class vectors.
+            real_data (2D NumPy array): data for cGAN training: a batch of concatenated
+                 sample vectors + one-hot-encoded class vectors.
 
         Returns:
             disc_loss: The Discriminator's loss.
@@ -141,19 +144,19 @@ class cGAN(BaseGAN):
 
     def train(self, x_train, y_train):
         """
-        Conventional training process of a Packed cGAN. The Generator and the Discriminator are trained
-        simultaneously in the traditional adversarial fashion by optimizing `loss_function`.
+        Conventional training process of a Packed cGAN. The Generator and the Discriminator are trained simultaneously
+        in the traditional adversarial fashion by optimizing `loss_function`.
 
         Args:
-            x_train: The training data instances.
-            y_train: The classes of the training data instances.
+            x_train (2D NumPy array): The training data instances.
+            y_train (1D NumPy array): The classes of the training data instances.
         """
 
         # Modify the size of the batch to align with self.pac_
         factor = self._batch_size // self.pac_
         batch_size = factor * self.pac_
 
-        self._transformer = DataTransformer(cont_normalizer='ss')
+        self._transformer = TabularTransformer(cont_normalizer='ss')
         self._transformer.fit(x_train)
         x_train = self._transformer.transform(x_train)
 
@@ -183,17 +186,17 @@ class cGAN(BaseGAN):
         return disc_loss, gen_loss
 
     def adaptive_train(self, x_train, y_train, clf, gen_samples_ratio=None):
-        """ Adaptive cGAN training
+        """ Adaptive cGAN training (experimental)
 
         Adaptive training by evaluating the quality of generated data during each epoch. Adaptive training is
         self-terminated when max training accuracy (of a classifier `clf`) is achieved.
 
         Args:
-            x_train: The training data instances.
-            y_train: The classes of the training data instances.
-            clf: A classifier that has been previously trained on the training set. Its performance is measured
+            x_train (2D NumPy array): The training data instances.
+            y_train (1D NumPy array): The classes of the training data instances.
+            clf (object): A classifier that has been previously trained on the training set. Its performance is measured
                 at each training epoch.
-            gen_samples_ratio: A tuple/list that denotes the number of samples to be generated from each class.
+            gen_samples_ratio (tuple/list): Denotes the number of samples to be generated from each class.
         """
 
         # Use KL Divergence to measure the distance between the real and generated data.
@@ -202,7 +205,7 @@ class cGAN(BaseGAN):
         factor = self._batch_size // self.pac_
         batch_size = factor * self.pac_
 
-        self._transformer = DataTransformer(cont_normalizer='ss')
+        self._transformer = TabularTransformer(cont_normalizer='ss')
         self._transformer.fit(x_train)
         x_train = self._transformer.transform(x_train)
 
@@ -286,8 +289,8 @@ class cGAN(BaseGAN):
         allowing its usage in over-sampling/under-sampling pipelines.
 
         Args:
-            x_train: The training data instances.
-            y_train: The classes of the training data instances.
+            x_train (2D NumPy array): The training data instances.
+            y_train (1D NumPy array): The classes of the training data instances.
         """
         self.train(x_train, y_train)
 
@@ -335,8 +338,8 @@ class cGAN(BaseGAN):
         - dict: a dictionary that indicates the number of samples to be generated from each class.
 
         Args:
-            x_train: The training data instances.
-            y_train: The classes of the training data instances.
+            x_train (2D NumPy array): The training data instances.
+            y_train (1D NumPy array): The classes of the training data instances.
 
         Returns:
             x_resampled: The training data instances + the generated data instances.
