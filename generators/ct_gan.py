@@ -19,6 +19,8 @@ from .gan_discriminators import Critic
 from .gan_generators import ctGenerator
 from .BaseGenerators import BaseGAN
 
+import DeepCoreML.paths as paths
+
 
 class DataSampler(object):
     """DataSampler samples the conditional vector and corresponding data for CTGAN."""
@@ -267,7 +269,7 @@ class ctGAN(BaseGAN):
                     # print("Start_Col:", st_c, ", End_Col: ", ed_c, ", CondVec:", c[:, st_c:ed_c])
                     tmp = nn.functional.cross_entropy(data[:, st:ed], torch.argmax(c[:, st_c:ed_c], dim=1), reduction='none')
                     # print("Temp=", tmp)
-                    a = input('').split(" ")[0]
+                    # a = input('').split(" ")[0]
                     # print("Original: ")
                     loss.append(tmp)
                     st = ed
@@ -301,7 +303,7 @@ class ctGAN(BaseGAN):
         if invalid_columns:
             raise ValueError(f'Invalid columns found: {invalid_columns}')
 
-    def train(self, train_data, discrete_columns=(), epochs=None):
+    def train(self, train_data, discrete_columns=(), epochs=None, store_losses=None):
         """Fit the CTGAN Synthesizer models to the training data.
 
         Args:
@@ -312,6 +314,7 @@ class ctGAN(BaseGAN):
                 numpy array, this list should contain the integer indices of the columns. Otherwise, if it is
                 a ``pandas.DataFrame``, this list should contain the column names.
             epochs: deprecated
+            store_losses:
         """
         self._validate_discrete_columns(train_data, discrete_columns)
 
@@ -353,6 +356,7 @@ class ctGAN(BaseGAN):
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
         loss_d = loss_g = 0
         c2 = 0
+        losses = []
         for i in range(epochs):
             for id_ in range(steps_per_epoch):
 
@@ -369,7 +373,7 @@ class ctGAN(BaseGAN):
                         m1 = torch.from_numpy(m1).to(self._device)
                         fakez = torch.cat([fakez, c1], dim=1)
 
-                        print("c1=", c1, ", m1=", m1, ", col=", col, "opt=", opt)
+                        # print("c1=", c1, ", m1=", m1, ", col=", col, "opt=", opt)
                         perm = np.arange(self._batch_size)
                         np.random.shuffle(perm)
                         real = self._data_sampler.sample_data(self._batch_size, col[perm], opt[perm])
@@ -428,9 +432,15 @@ class ctGAN(BaseGAN):
                 loss_g.backward()
                 self.G_optimizer_.step()
 
+            if store_losses is not None:
+                losses.append((i, i + 1, loss_d.detach().cpu(), loss_g.detach().cpu()))
+
             if self._verbose:
                 print(f'Epoch {i+1}, Loss G: {loss_g.detach().cpu(): .4f},'
                       f'Loss D: {loss_d.detach().cpu(): .4f}', flush=True)
+
+        if store_losses is not None:
+            self.plot_losses(losses, store_losses)
 
     def fit(self, x_train, y_train):
         """`fit` invokes the GAN training process. `fit` renders ctGAN compatible with `imblearn`'s interface,
@@ -537,7 +547,7 @@ class ctGAN(BaseGAN):
         self._input_dim = x_train.shape[1]
 
         # Train ctGAN
-        self.train(training_data, discrete_columns=(self._input_dim,))
+        self.train(training_data, discrete_columns=(self._input_dim,), store_losses=paths.output_path_loss)
 
         # One-hot-encode the class labels; Get the number of classes and the number of samples to generate per class.
         class_encoder = OneHotEncoder()

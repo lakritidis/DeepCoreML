@@ -169,7 +169,7 @@ class TabularDataset(Dataset):
         """
         Display the basic dataset parameters.
         """
-        print("Num Rows:", self.num_rows, ", Num Columns:", self.num_rows)
+        print("Num Rows:", self.num_rows, ", Num Columns:", self.num_columns)
         print("\nEncoded data Dimensions:", self.dimensionality)
         print("Classes:", self.num_classes, "- Class Distribution:")
         for k in range(self.num_classes):

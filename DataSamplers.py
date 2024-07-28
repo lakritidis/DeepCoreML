@@ -17,7 +17,7 @@ from generators.ct_gan import ctGAN
 # from generators.gaan_v1 import GAANv1
 # from generators.gaan_v2 import GAANv2
 # from generators.gaan_v3 import GAANv3
-from generators.ctd_gan import ctdGAN
+from generators.ctd_gan_experimental import ctdGAN
 from generators.cbr import CBR
 
 from sdv.single_table import GaussianCopulaSynthesizer

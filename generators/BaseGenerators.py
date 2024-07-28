@@ -2,6 +2,8 @@
 # Generative models and Over-sampling methods inherit from this class.
 
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 import torch
 
@@ -88,6 +90,31 @@ class BaseGAN(BaseGenerator):
                 "\tBatch Size" + str(self._batch_size),
                 ]
         print(info)
+
+    @staticmethod
+    def plot_losses(losses, store_losses):
+        """
+        Plot the Discriminator loss and the Generator loss values vs. the training epoch.
+        Args:
+            losses: A list of tuples (iteration, epoch, Discriminator loss, Generator loss) recorded during training.
+            store_losses: The file path to store the plot.
+        """
+        columns = ['Iteration', 'Epoch', 'Discriminator Loss', 'Generator Loss']
+        df = pd.DataFrame(losses, columns=columns)
+        df.to_csv(store_losses + 'ctdGAN_losses.csv', sep=';', decimal='.', index=False)
+
+        df_mean = pd.DataFrame()
+        df_mean['Mean Discriminator Loss'] = df.groupby('Epoch')['Discriminator Loss'].mean()
+        df_mean['Mean Generator Loss'] = df.groupby('Epoch')['Generator Loss'].mean()
+        df_mean['Epoch'] = df_mean.index + 1
+        df_mean.to_csv(store_losses + 'ctdGAN_mean_losses.csv', sep=';', decimal='.', index=False)
+
+        # plot = df.plot(x="Iteration", y=["Discriminator Loss", "Generator Loss"], ylim=(0, 1))
+        plot = df_mean.plot(x='Epoch', y=['Mean Discriminator Loss', 'Mean Generator Loss'])
+        fig = plot.get_figure()
+        fig.savefig(store_losses + 'GAN_losses.png')
+
+        plt.show()
 
     def prepare(self, x_train, y_train):
         """

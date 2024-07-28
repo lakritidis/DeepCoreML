@@ -53,7 +53,7 @@ def test_model(model, dataset, seed):
     elif model == "CTGAN":
         gan = ctGAN(discriminator=(256, 256), generator=(128, 256, 128), pac=1)
     elif model == "CTDGAN":
-        gan = ctdGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, epochs=300,
+        gan = ctdGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, epochs=1000,
                      random_state=seed)
     else:
         print("No model specified")

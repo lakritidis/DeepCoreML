@@ -153,7 +153,7 @@ sdd_datasets = {
     'XER-1.4': {'path': sd_path + 'xerces-1.4.csv', 'feature_cols': range(0, 20), 'class_col': 20}
 }
 
-eval_methods.test_model('CTDGAN', sdd_datasets['CM1'], seed)
+eval_methods.test_model('CTDGAN', sdd_datasets['CAMEL-1.2'], seed)
 
 # eval_methods.eval_resampling(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
 # eval_methods.eval_detectability(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
