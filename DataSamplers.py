@@ -17,7 +17,7 @@ from generators.ct_gan import ctGAN
 # from generators.gaan_v1 import GAANv1
 # from generators.gaan_v2 import GAANv2
 # from generators.gaan_v3 import GAANv3
-from generators.ctd_gan_experimental import ctdGAN
+from generators.ctd_gan import ctdGAN
 from generators.cbr import CBR
 
 from sdv.single_table import GaussianCopulaSynthesizer
@@ -122,13 +122,17 @@ class DataSamplers:
         knn = 10
         rad = 1
         pac = 1
-        epochs = 300
+        epochs = 500
         batch_size = 32
-        max_clusters = 20
+        max_clusters = 10
         act = 'tanh'
 
         # Experimental over-samplers.
-        self.over_samplers_exp = (
+        self.over_samplers_ = (
+            BaseSampler("ctdGANBase", "ctdGANBase",
+                        ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, batch_size=batch_size,
+                               epochs=epochs, pac=pac, max_clusters=max_clusters, random_state=random_state)),
+
             # BaseSampler("Cluster GAN-Uniform", "ClusterGAN-Uni",
             #            GAANv1(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
             #                       g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
@@ -151,7 +155,7 @@ class DataSamplers:
         )
 
         # All over-samplers.
-        self.over_samplers_ = (
+        self.over_samplers_all_ = (
             BaseSampler("None", "None", None),
 
             BaseSampler("Random Oversampling", "ROS",
@@ -200,17 +204,15 @@ class DataSamplers:
                             metadata, enforce_min_max_values=False, enforce_rounding=False, epochs=epochs,
                             verbose=False)),
 
-            BaseSampler("ctdGAN", "ctdGAN",
+            BaseSampler("ctdGANBase", "ctdGANBase",
                         ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, batch_size=batch_size,
-                               epochs=epochs, pac=pac, max_clusters=max_clusters, projector=None,
-                               random_state=random_state)),
+                               epochs=epochs, pac=pac, max_clusters=max_clusters, random_state=random_state)),
         )
 
         self.over_samplers_sdv_ = (
             BaseSampler("ctdGAN", "ctdGAN",
-                        ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
-                               g_activation=act, epochs=epochs, batch_size=batch_size, max_clusters=max_clusters,
-                               projector=None, random_state=random_state)),
+                        ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, batch_size=batch_size,
+                               epochs=epochs, pac=pac, max_clusters=max_clusters, random_state=random_state)),
 
             BaseSampler("Gaussian Copula", "GCOP",
                         GaussianCopulaSynthesizer(

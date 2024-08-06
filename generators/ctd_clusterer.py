@@ -6,17 +6,17 @@ from torch.distributions import Normal
 from sklearn.ensemble import IsolationForest
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.decomposition import PCA
+from sklearn.pipeline import Pipeline
 
 from joblib import Parallel, delayed
 
 
 class ctdCluster:
-    """A cluster component.
-
-    """
+    """A typical cluster for ctdGAN."""
     def __init__(self, label=None, center=None, data_transformer=None, clip=False, random_state=0):
         """
-        Cluster initializer.
+        ctdCluster initializer. A typical cluster for ctdGAN.
 
         Args:
             label: The cluster's label
@@ -26,6 +26,8 @@ class ctdCluster:
               * '`None`' : No transformation takes place; the data is considered immutable
               * '`stds`' : Standard scaler
               * '`mms`'  : Min-Max scaler
+              * '`pca`' : Principal Component Analysis
+              * '`pca-mms`'  : Principal Component Analysis followed by Min-Max normalization
             clip (bool): If 'True' the reconstructed data will be clipped to their original minimum and maximum values.
             random_state (int): Seed the random number generators. Use the same value for reproducible results.
         """
@@ -47,7 +49,7 @@ class ctdCluster:
         if data_transformer == 'stds':
             self._transformer = StandardScaler()
         elif data_transformer == 'mms':
-            self._transformer = MinMaxScaler()
+            self._transformer = MinMaxScaler(feature_range=(-1, 1))
         else:
             self._transformer = None
 
@@ -56,10 +58,9 @@ class ctdCluster:
             Compute cluster statistics and fit the selected Data Transformer.
 
         Args:
-            `x` (NumPy array): The data to be transformed
-            `y` (NumPy array): If the data has classes, pass them here. The ctdGAN will be trained for resampling.
-            `num_classes`: The distinct number of classes in `y`.
-
+            x (NumPy array): The data to be transformed
+            y (NumPy array): If the data has classes, pass them here. The ctdGAN will be trained for resampling.
+            num_classes: The distinct number of classes in `y`.
         """
         self._num_samples = x.shape[0]
         self._data_dimensions = x.shape[1]
@@ -67,7 +68,7 @@ class ctdCluster:
         mean = torch.zeros(self._data_dimensions)
         std = torch.ones(self._data_dimensions)
 
-        # The probability distribution that models the cluster samples.
+        # The probability distribution that models the cluster samples
         self.probability_distribution_ = Normal(loc=mean, scale=std)
 
         # Min/Max column values are used for clipping.
@@ -76,10 +77,10 @@ class ctdCluster:
 
         self.class_distribution_ = np.zeros(num_classes)
         if y is not None:
-            unique_values = np.unique(y, return_counts=True)
+            unique_classes = np.unique(y, return_counts=True)
             n = 0
-            for uv in unique_values[0]:
-                self.class_distribution_[uv] = unique_values[1][n]
+            for uv in unique_classes[0]:
+                self.class_distribution_[uv] = unique_classes[1][n]
                 n += 1
 
         if self._transformer is not None:
@@ -109,6 +110,7 @@ class ctdCluster:
         `inverse_transform` function of `self._transformer`, followed by a filter that clips the returned values.
 
         Args:
+            x: The input data to be reconstructed (NumPy array).
             x: The input data to be reconstructed (NumPy array).
 
         Returns:
@@ -159,7 +161,25 @@ class ctdCluster:
 
 
 class ctdClusterer:
+    """ A data preprocessing object for ctdGAN. It partitions the input (real) space into clusters and then
+    it transforms the cluster data in numerous ways (scaling, normalization, variance maximization via PCA).
+    """
     def __init__(self, max_clusters=10, data_transformer='None', samples_per_class=(), random_state=0):
+        """
+        ctdClusterer initializer.
+
+        Args:
+            max_clusters (int): The maximum number of clusters to create
+            data_transformer (string): A descriptor that defines a transformation on the cluster's data. Values:
+
+              * '`None`' : No transformation takes place; the data is considered immutable
+              * '`stds`' : Standard scaler
+              * '`mms`'  : Min-Max scaler
+              * '`pca`' : Principal Component Analysis
+              * '`pca-mms`'  : Principal Component Analysis followed by Min-Max normalization
+            samples_per_class (List or tuple of integers): Contains the number of samples per class
+            random_state: Seed the random number generators. Use the same value for reproducible results.
+        """
         self._max_clusters = max_clusters
         self._random_state = random_state
 
@@ -171,6 +191,16 @@ class ctdClusterer:
         self._samples_per_class = samples_per_class
 
     def perform_clustering(self, x_train, y_train, num_classes):
+        """
+
+        Args:
+            x_train: Training data
+            y_train: The classes of the training samples
+            num_classes: The number of distinct classes of the training data
+
+        Returns:
+            Transformed data
+        """
         # Find the optimal number of clusters (best_k) for k-Means algorithm. Perform multiple executions and pick
         # the one that produces the minimum scaled inertia.
         mms = MinMaxScaler()
@@ -178,7 +208,7 @@ class ctdClusterer:
         k_range = range(2, self._max_clusters)
 
         # Perform multiple k-Means executions in parallel; store the scaled inertia of each clustering in the ans array.
-        scaled_inertia = Parallel(n_jobs=-1)(delayed(self._run_test_kmeans)(x_scaled, k) for k in k_range)
+        scaled_inertia = Parallel(n_jobs=1)(delayed(self._run_test_kmeans)(x_scaled, k) for k in k_range)
         best_k = 2 + np.argmin(scaled_inertia)
 
         # After the optimal number of clusters best_k has been determined, execute one last k-Means with best_k clusters
@@ -214,7 +244,7 @@ class ctdClusterer:
             self.probability_matrix_ = np.zeros((num_classes, self.num_clusters_))
             for c in range(num_classes):
                 class_samples = self._samples_per_class[c]
-                class_probability = class_samples / y_train.shape[0]
+                # class_probability = class_samples / y_train.shape[0]
                 # print("\nClass:", c, "- Samples:", class_samples, ", Class probability:", class_probability)
 
                 for u in range(self.num_clusters_):

@@ -1,5 +1,5 @@
 base_path = '/media/leo/7CE54B377BB9B18B/'
-# base_path = ''
+# base_path = 'C:/12700/'
 
 output_path_performance = base_path + 'dev/Python/ctdGAN/results/'
 output_path_loss = output_path_performance + 'loss/'

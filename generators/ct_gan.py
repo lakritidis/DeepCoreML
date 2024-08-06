@@ -547,7 +547,8 @@ class ctGAN(BaseGAN):
         self._input_dim = x_train.shape[1]
 
         # Train ctGAN
-        self.train(training_data, discrete_columns=(self._input_dim,), store_losses=paths.output_path_loss)
+        # self.train(training_data, discrete_columns=(self._input_dim,), store_losses=paths.output_path_loss)
+        self.train(training_data, discrete_columns=(self._input_dim,), store_losses=None)
 
         # One-hot-encode the class labels; Get the number of classes and the number of samples to generate per class.
         class_encoder = OneHotEncoder()

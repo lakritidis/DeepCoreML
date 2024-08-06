@@ -15,8 +15,43 @@ sd_path = paths.software_defect_dataset_path
 id_path = paths.imbalanced_dataset_path
 
 datasets_imb = {
+
     'cleveland-0_vs_4': {'path': id_path + 'cleveland-0_vs_4.csv', 'categorical_cols':(), 'class_col': 13},
-    'dermatology-6': {'path': id_path + 'dermatology-6.csv', 'class_col': 34},
+    # 'dermatology-6': {'path': id_path + 'dermatology-6.csv', 'class_col': 34}, GCOP achieves bacc=1
+
+    'ecoli-0-1_vs_2-3-5': {'path': id_path + 'ecoli-0-1_vs_2-3-5.csv', 'class_col': 7},
+    'ecoli-0-1_vs_5': {'path': id_path + 'ecoli-0-1_vs_5.csv', 'feature_cols': range(0, 6), 'class_col': 6},
+    'ecoli-0-1-4-6_vs_5': {'path': id_path + 'ecoli-0-1-4-6_vs_5.csv', 'feature_cols': range(0, 6), 'class_col': 6},
+    'ecoli-0-1-4-7_vs_2-3-5-6': {'path': id_path + 'ecoli-0-1-4-7_vs_2-3-5-6.csv', 'feature_cols': range(0, 7),
+                                 'class_col': 7},
+    'ecoli-0-1-4-7_vs_5-6': {'path': id_path + 'ecoli-0-1-4-7_vs_5-6.csv', 'feature_cols': range(0, 6), 'class_col': 6},
+    'ecoli-0-2-3-4_vs_5': {'path': id_path + 'ecoli-0-2-3-4_vs_5.csv', 'feature_cols': range(0, 7), 'class_col': 7},
+
+    'yeast1': {'path': id_path + 'yeast1.csv', 'feature_cols': range(0, 8), 'class_col': 8},
+    'yeast3': {'path': id_path + 'yeast3.csv', 'feature_cols': range(0, 8), 'class_col': 8},
+    'yeast4': {'path': id_path + 'yeast4.csv', 'feature_cols': range(0, 8), 'class_col': 8},
+    'yeast5': {'path': id_path + 'yeast5.csv', 'feature_cols': range(0, 8), 'class_col': 8},
+    'yeast6': {'path': id_path + 'yeast6.csv', 'feature_cols': range(0, 8), 'class_col': 8},
+
+    'glass1': {'path': id_path + 'glass1.csv', 'feature_cols': range(0, 9), 'class_col': 9},
+    'glass2': {'path': id_path + 'glass2.csv', 'feature_cols': range(0, 9), 'class_col': 9},
+    'glass4': {'path': id_path + 'glass4.csv', 'feature_cols': range(0, 9), 'class_col': 9},
+    'glass5': {'path': id_path + 'glass5.csv', 'feature_cols': range(0, 9), 'class_col': 9},
+    'glass6': {'path': id_path + 'glass6.csv', 'feature_cols': range(0, 9), 'class_col': 9},
+
+    'led7digit-0-2-4-5-6-7-8-9_vs_1': {'path': id_path + 'led7digit-0-2-4-5-6-7-8-9_vs_1.csv',
+                                       'feature_cols': range(0, 7), 'class_col': 7},
+    'new-thyroid1': {'path': id_path + 'new-thyroid1.csv', 'feature_cols': range(0, 5), 'class_col': 5},
+
+    'pima': {'path': id_path + 'pima.csv', 'feature_cols': range(0, 8), 'class_col': 8},
+    'segment0': {'path': id_path + 'segment0.csv', 'feature_cols': range(0, 19), 'class_col': 19},
+
+}
+
+datasets_imb_all = {
+
+    'cleveland-0_vs_4': {'path': id_path + 'cleveland-0_vs_4.csv', 'categorical_cols':(), 'class_col': 13},
+    # 'dermatology-6': {'path': id_path + 'dermatology-6.csv', 'class_col': 34}, GCOP achieves bacc=1
 
     'ecoli-0-1_vs_2-3-5': {'path': id_path + 'ecoli-0-1_vs_2-3-5.csv', 'class_col': 7},
     'ecoli-0-1_vs_5': {'path': id_path + 'ecoli-0-1_vs_5.csv', 'feature_cols': range(0, 6), 'class_col': 6},
@@ -86,7 +121,7 @@ datasets_imb = {
     'yeast-1-4-5-8_vs_7': {'path': id_path + 'yeast-1-4-5-8_vs_7.csv', 'feature_cols': range(0, 8), 'class_col': 8},
     'yeast-2_vs_8': {'path': id_path + 'yeast-2_vs_8.csv', 'feature_cols': range(0, 8), 'class_col': 8},
     'yeast3': {'path': id_path + 'yeast3.csv', 'feature_cols': range(0, 8), 'class_col': 8},
-    'yeast4': {'path': id_path + 'yeast3.csv', 'feature_cols': range(0, 8), 'class_col': 8},
+    'yeast4': {'path': id_path + 'yeast4.csv', 'feature_cols': range(0, 8), 'class_col': 8},
     'yeast5': {'path': id_path + 'yeast5.csv', 'feature_cols': range(0, 8), 'class_col': 8},
     'yeast6': {'path': id_path + 'yeast6.csv', 'feature_cols': range(0, 8), 'class_col': 8},
 
@@ -153,9 +188,9 @@ sdd_datasets = {
     'XER-1.4': {'path': sd_path + 'xerces-1.4.csv', 'feature_cols': range(0, 20), 'class_col': 20}
 }
 
-eval_methods.test_model('CTDGAN', sdd_datasets['CAMEL-1.2'], seed)
+# eval_methods.test_model('CTDGAN', sdd_datasets['CAMEL-1.2'], seed)
 
-# eval_methods.eval_resampling(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
+eval_methods.eval_resampling(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
 # eval_methods.eval_detectability(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
 
 # eval_methods.eval_ml_efficacy(datasets, num_threads, seed)

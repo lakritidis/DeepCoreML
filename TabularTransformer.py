@@ -4,7 +4,9 @@
 import numpy as np
 import pandas as pd
 
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.decomposition import PCA
+from sklearn.pipeline import Pipeline
 
 from joblib import Parallel, delayed
 from rdt.transformers import ClusterBasedNormalizer, OneHotEncoder
@@ -33,18 +35,15 @@ class TabularTransformer(object):
             cont_normalizer: Normalizer for the continuous columns:
 
              * 'none': Do not apply a transformation in the continuous columns.
-             * 'gmo': Bayesian Gaussian Mixture.
              * 'gm': Bayesian Gaussian Mixture + One-hot-encoded component labels.
-             * 'ss': A typical Standard scaler.
-            max_clusters: Max number of Gaussian distributions in Bayesian GMM;
-                used when `cont_normalizer='gm'` or `'gmo'`.
-            weight_threshold: Weight threshold for a Gaussian distribution to be kept;
-                used when `cont_normalizer='gm'` or `'gmo'`.
+             * 'stds': A typical Standard scaler.
+            max_clusters: Max number of Gaussian distributions in Bayesian GMM; used when `cont_normalizer='gm'`
+            weight_threshold: Weight threshold for a Gaussian distribution to be kept; used when `cont_normalizer='gm'`
             with_mean: If True, it centers the data before scaling. This does not work (and will raise an exception)
                 when attempted on sparse matrices, because centering them entails building a dense matrix which in
-                common use cases is likely to be too large to fit in memory; used when `cont_normalizer='ss'`.
+                common use cases is likely to be too large to fit in memory; used when `cont_normalizer='stds'`.
             with_std: If `True`, scale the data to unit variance (or equivalently, unit standard deviation);
-                used when `cont_normalizer='ss'`.
+                used when `cont_normalizer='stds'`.
             clip: If 'True' the reconstructed data will be clipped to their original minimum and maximum values.
         """
         self._cont_normalizer = cont_normalizer
@@ -84,16 +83,25 @@ class TabularTransformer(object):
                                       output_info=[SpanInfo(1, 'tanh'), SpanInfo(num_components, 'softmax')],
                                       output_dimensions=1 + num_components)
 
-        elif self._cont_normalizer == 'gmo':
-            tran = ClusterBasedNormalizer(model_missing_values=True, max_clusters=min(len(data), self._max_clusters))
-            tran.fit(data, column_name)
+        elif self._cont_normalizer == 'stds':
+            tran = StandardScaler(with_std=self._with_std, with_mean=self._with_mean)
+            tran.fit(data)
 
             cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
                                       column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
 
-        elif self._cont_normalizer == 'ss':
-            tran = StandardScaler(with_mean=self._with_mean, with_std=self._with_std)
+        elif self._cont_normalizer == 'stds-pca':
+            tran = Pipeline(steps=[("std", StandardScaler(with_std=self._with_std, with_mean=self._with_mean)),
+                                   ("pca", PCA())])
+            tran.fit(data)
+
+            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
+                                      column_max=max_val, column_min=min_val,
+                                      output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
+
+        elif self._cont_normalizer == 'mms':
+            tran = MinMaxScaler(feature_range=(-1, 1))
             tran.fit(data)
 
             cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
@@ -105,19 +113,6 @@ class TabularTransformer(object):
                                       column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
 
-        '''
-        elif self._cont_normalizer == 'ss-pca':
-            tran = Pipeline([
-                ('scaler', StandardScaler(with_mean=True, with_std=True)),
-                ('pca', PCA(n_components=self._input_dim, random_state=self._random_state))
-            ])
-            ss = StandardScaler(with_mean=self._with_mean, with_std=self._with_std)
-            ss.fit(data)
-
-            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=ss,
-                                      column_max=max_val, column_min=min_val,
-                                      output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
-        '''
         return cti
 
     def _fit_discrete(self, data):
@@ -185,7 +180,7 @@ class TabularTransformer(object):
             index = transformed[f'{column_name}.component'].to_numpy().astype(int)
             output[np.arange(index.size), index + 1] = 1.0
 
-        elif self._cont_normalizer == 'ss':
+        elif self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms' or self._cont_normalizer == 'stds-pca':
             output = column_transform_info.transform.transform(data)
 
         elif self._cont_normalizer == 'none':
@@ -258,7 +253,7 @@ class TabularTransformer(object):
 
             ret_data = encoder.reverse_transform(data)
 
-        elif self._cont_normalizer == 'ss':
+        elif self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms' or self._cont_normalizer == 'stds-pca':
             ret_data = encoder.inverse_transform(column_data)
 
         elif self._cont_normalizer == 'none':
