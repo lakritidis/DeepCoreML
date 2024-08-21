@@ -20,7 +20,7 @@ from sdv.single_table import GaussianCopulaSynthesizer
 from sdv.single_table import CTGANSynthesizer
 from sdv.single_table import TVAESynthesizer
 
-from dp_cgans import DP_CGAN
+# from dp_cgans import DP_CGAN
 
 
 class BaseSampler:
@@ -130,7 +130,7 @@ class DataSamplers:
             dp_cols[k] = {'type': metadata.columns[k]['sdtype']}
 
         # Experimental over-samplers.
-        self.over_samplers_ = (
+        self.over_samplers_gans_ = (
             # BaseSampler("TVAE", "TVAE",
             #            TVAESynthesizer(metadata, enforce_min_max_values=True, enforce_rounding=False, epochs=epochs)),
 
@@ -138,7 +138,7 @@ class DataSamplers:
             #             cGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
             #                 g_activation=act, epochs=epochs, batch_size=batch_size, random_state=random_state)),
 
-            #BaseSampler("Safe-Borderline GAN (KNN)", "SBGAN",
+            # BaseSampler("Safe-Borderline GAN (KNN)", "SBGAN",
             #            sbGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, pac=pac, adaptive=False,
             #                  g_activation=act, epochs=epochs, batch_size=batch_size, method='knn', k=knn, r=rad,
             #                  random_state=random_state)),
@@ -148,24 +148,24 @@ class DataSamplers:
             #                metadata, enforce_min_max_values=False, enforce_rounding=False, epochs=epochs,
             #                verbose=False)),
 
-            #BaseSampler("ctdGANBase_mms11", "ctdGANBase_mms11",
+            # BaseSampler("ctdGANBase_mms11", "ctdGANBase_mms11",
             #            ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, batch_size=batch_size,
             #                   scaler='mms11', epochs=epochs, pac=pac, max_clusters=max_clusters,
             #                   random_state=random_state)),
 
-            #BaseSampler("ctdGANBase_mms11", "ctdGANBase_mms11",
+            # BaseSampler("ctdGANBase_mms11", "ctdGANBase_mms11",
             #            ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, batch_size=batch_size,
             #                   scaler='stds', epochs=epochs, pac=pac, max_clusters=max_clusters,
             #                   random_state=random_state)),
 
-            BaseSampler("DPCGAN", "DPCGAN",
-                        DP_CGAN(field_types=dp_cols, generator_dim=(128, 128, 128), discriminator_dim=(128, 128, 128),
-                                epochs=epochs, batch_size=batch_size, log_frequency=True, verbose=False, pac=1,
-                                generator_lr=2e-4, discriminator_lr=2e-4, discriminator_steps=1, private=False,)),
+            # BaseSampler("DPCGAN", "DPCGAN",
+            #            DP_CGAN(field_types=dp_cols, generator_dim=(128, 128, 128), discriminator_dim=(128, 128, 128),
+            #                    epochs=epochs, batch_size=batch_size, log_frequency=True, verbose=False, pac=1,
+            #                    generator_lr=2e-4, discriminator_lr=2e-4, discriminator_steps=1, private=False,)),
         )
 
         # All over-samplers.
-        self.over_samplers_all_ = (
+        self.over_samplers_ = (
             BaseSampler("None", "None", None),
 
             BaseSampler("Random Oversampling", "ROS",
@@ -220,6 +220,7 @@ class DataSamplers:
                         ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, batch_size=batch_size,
                                scaler='mms11', epochs=epochs, pac=pac, max_clusters=max_clusters,
                                random_state=random_state)),
+
         )
 
         self.under_samplers_ = (

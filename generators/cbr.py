@@ -199,8 +199,7 @@ class CBR(BaseGenerator):
         eps = med / self._min_distance_factor
 
         if self._cluster_estimator == 'hac':
-            clustering_method = AgglomerativeClustering(distance_threshold=eps, n_clusters=None, affinity='euclidean',
-                                                        linkage='ward')
+            clustering_method = AgglomerativeClustering(distance_threshold=eps, n_clusters=None, linkage='ward')
             clustering_method.fit(x_in)
 
         elif self._cluster_estimator == 'dbscan':

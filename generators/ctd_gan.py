@@ -509,8 +509,8 @@ class ctdGAN(BaseGAN):
         """
 
         # Train the GAN with the input data
-        self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=paths.output_path_loss)
-        # self.train(x_train, y_train, store_losses=None)
+        # self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=paths.output_path_loss)
+        self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=None)
 
         x_resampled = np.copy(x_train)
         y_resampled = np.copy(y_train)
