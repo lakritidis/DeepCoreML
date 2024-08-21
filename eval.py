@@ -5,9 +5,6 @@ from generators.sb_gan import sbGAN
 from generators.c_gan import cGAN
 from generators.ct_gan import ctGAN
 
-from generators.gaan_v1 import GAANv1
-from generators.gaan_v2 import GAANv2
-from generators.gaan_v3 import GAANv3
 from generators.ctd_gan import ctdGAN
 
 from TabularDataset import TabularDataset
@@ -33,35 +30,33 @@ def test_model(model, dataset, seed):
 
     """Create, train and test individual generators.
     """
-    dset = TabularDataset('test', class_column=dataset['class_col'], random_state=seed)
+    dset = TabularDataset(name='test', class_column=dataset['class_col'],
+                          categorical_columns=dataset['categorical_cols'],  random_state=seed)
     dset.load_from_csv(path=dataset['path'])
     dset.display_params()
 
     x = dset.x_
     y = dset.y_
 
-    if model == "SB-GAN":
+    t_s = time.time()
+
+    if model == "SBGAN":
         gan = sbGAN(discriminator=(128, 128), generator=(128, 256, 128), method='knn', pac=1, k=5, random_state=seed)
-    elif model == "GAANv1":
-        gan = GAANv1(discriminator=(128, 128), generator=(128, 256, 128), pac=1, random_state=seed)
-    elif model == "GAANv2":
-        gan = GAANv2(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, random_state=seed)
-    elif model == "GAANv3":
-        gan = GAANv3(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, random_state=seed)
     elif model == "CGAN":
         gan = cGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, random_state=seed)
     elif model == "CTGAN":
         gan = ctGAN(discriminator=(256, 256), generator=(128, 256, 128), pac=1)
     elif model == "CTDGAN":
-        gan = ctdGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, max_clusters=10, epochs=1000,
-                     random_state=seed)
+        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=1, max_clusters=10, epochs=500, scaler='mms11',
+                     embedding_dim=32, random_state=seed)
     else:
         print("No model specified")
         exit()
 
-    balanced_data = gan.fit_resample(x, y)
+    balanced_data = gan.fit_resample(x, y, categorical_columns=dataset['categorical_cols'])
     print(balanced_data[0].shape)
     print(balanced_data[0])
+    print("Finished in", time.time() - t_s, "sec")
 
 
 # Evaluate the ability of a resampling method to improve classification performance. This procedure employs k-fold
@@ -108,18 +103,21 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
 
         # Load the dataset from the input CSV file
         ds = datasets[key]
-        original_dataset = TabularDataset(key, class_column=ds['class_col'], random_state=random_state)
+        original_dataset = TabularDataset(key, class_column=ds['class_col'], categorical_columns=ds['categorical_cols'],
+                                          random_state=random_state)
         original_dataset.load_from_csv(path=ds['path'])
 
         print("\n=================================\n Evaluating dataset", key, " - shape:", original_dataset.x_.shape)
 
-        # Convert all columns to numerical
+        # A SingleTableMetadata() object is required by the SDV models
         metadata = SingleTableMetadata()
         metadata.detect_from_dataframe(original_dataset.df_)
         k = list(metadata.columns.keys())[len(metadata.columns.keys()) - 1]
         for k in metadata.columns.keys():
-            metadata.columns[k] = {'sdtype': 'numerical'}
-
+            if k in original_dataset.categorical_columns:
+                metadata.columns[k] = {'sdtype': 'categorical'}
+            else:
+                metadata.columns[k] = {'sdtype': 'numerical'}
         # The last column becomes categorical - This structure is required by the SDV models.
         metadata.columns[k] = {'sdtype': 'categorical'}
 

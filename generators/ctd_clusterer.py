@@ -6,32 +6,37 @@ from torch.distributions import Normal
 from sklearn.ensemble import IsolationForest
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.decomposition import PCA
-from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
 
 from joblib import Parallel, delayed
 
 
 class ctdCluster:
     """A typical cluster for ctdGAN."""
-    def __init__(self, label=None, center=None, data_transformer=None, clip=False, random_state=0):
+    def __init__(self, label=None, center=None, scaler=None, embedding_dim=32,
+                 continuous_columns=(), discrete_columns=(), clip=False, random_state=0):
         """
         ctdCluster initializer. A typical cluster for ctdGAN.
 
         Args:
             label: The cluster's label
-            center: The cluster's centroid
-            data_transformer (string): A descriptor that defines a transformation on the cluster's data. Values:
+            center (tuple): The cluster's centroid
+            scaler (string): A descriptor that defines a transformation on the cluster's data. Values:
 
-              * '`None`' : No transformation takes place; the data is considered immutable
-              * '`stds`' : Standard scaler
-              * '`mms`'  : Min-Max scaler
-              * '`pca`' : Principal Component Analysis
-              * '`pca-mms`'  : Principal Component Analysis followed by Min-Max normalization
+              * '`None`'  : No transformation takes place; the data is considered immutable
+              * '`stds`'  : Standard scaler
+              * '`mms01`' : Min-Max scaler in the range (0,1)
+              * '`mms11`' : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
+            embedding_dim (int): The dimensionality of the latent space (for the probability distribution)
+            continuous_columns (tuple): The continuous columns in the input data
+            discrete_columns (tuple): The columns in the input data that contain categorical variables
             clip (bool): If 'True' the reconstructed data will be clipped to their original minimum and maximum values.
             random_state (int): Seed the random number generators. Use the same value for reproducible results.
         """
         self._label = label
+        self._embedding_dim = embedding_dim
+        self._continuous_columns = continuous_columns
+        self._discrete_columns = discrete_columns
         self._clip = clip
         self._random_state = random_state
 
@@ -45,13 +50,30 @@ class ctdCluster:
         self.class_distribution_ = None
         self.probability_distribution_ = None
 
-        # Define the Data Transformation Model
-        if data_transformer == 'stds':
-            self._transformer = StandardScaler()
-        elif data_transformer == 'mms':
-            self._transformer = MinMaxScaler(feature_range=(-1, 1))
+        # Define the Data Transformation Model for the continuous columns
+        if len(continuous_columns) > 0:
+            if scaler == 'stds':
+                self._scaler = StandardScaler()
+                # self._scaler = ColumnTransformer(
+                #    remainder='passthrough',
+                #    transformers=[(scaler, StandardScaler(), continuous_columns)])
+
+            elif scaler == 'mms01':
+                self._scaler = MinMaxScaler(feature_range=(0, 1))
+                # self._scaler = ColumnTransformer(
+                #    remainder='passthrough',
+                #    transformers=[(scaler, MinMaxScaler(feature_range=(0, 1)), continuous_columns)])
+
+            elif scaler == 'mms11':
+                self._scaler = MinMaxScaler(feature_range=(-1, 1))
+                # self._scaler = ColumnTransformer(
+                #   remainder='passthrough', force_int_remainder_cols=True,
+                #    transformers=[(scaler, MinMaxScaler(feature_range=(-1, 1)), continuous_columns)])
+
+            else:
+                self._scaler = None
         else:
-            self._transformer = None
+            self._scaler = None
 
     def fit(self, x, y=None, num_classes=0):
         """
@@ -65,15 +87,15 @@ class ctdCluster:
         self._num_samples = x.shape[0]
         self._data_dimensions = x.shape[1]
 
-        mean = torch.zeros(self._data_dimensions)
-        std = torch.ones(self._data_dimensions)
+        mean = torch.zeros(self._embedding_dim)
+        std = torch.ones(self._embedding_dim)
 
         # The probability distribution that models the cluster samples
         self.probability_distribution_ = Normal(loc=mean, scale=std)
 
         # Min/Max column values are used for clipping.
-        self._min = [np.min(x[:, i]) for i in range(self._data_dimensions)]
-        self._max = [np.max(x[:, i]) for i in range(self._data_dimensions)]
+        self._min = [np.min(x[:, i]) for i in self._continuous_columns]
+        self._max = [np.max(x[:, i]) for i in self._continuous_columns]
 
         self.class_distribution_ = np.zeros(num_classes)
         if y is not None:
@@ -83,31 +105,40 @@ class ctdCluster:
                 self.class_distribution_[uv] = unique_classes[1][n]
                 n += 1
 
-        if self._transformer is not None:
-            self._transformer.fit(x)
+        if self._scaler is not None:
+            x_cont = x[:, self._continuous_columns]
+            self._scaler.fit(x_cont)
 
     def transform(self, x):
-        if self._transformer is not None:
-            return self._transformer.transform(x)
+        if self._scaler is not None:
+            # print("Before Transformation:\n", x)
+            x_cont = x[:, self._continuous_columns]
+            transformed = self._scaler.transform(x_cont)
+            # print("After Transformation of Continuous Cols:\n", transformed)
+
+            for d_col in self._discrete_columns:
+                transformed = np.insert(transformed, d_col, x[:, d_col], axis=1)
+            # print("After Transformation & concat with Discrete Cols:\n", transformed)
+            return transformed
         else:
             return x
 
     def fit_transform(self, x):
-        """Transform the sample vectors by applying the transformation function of `self._transformer`. In fact, this
-        is a simple wrapper for the `fit_transform` function of `self._transformer`.
+        """Transform the sample vectors by applying the transformation function of `self._scaler`. In fact, this
+        is a simple wrapper for the `fit_transform` function of `self._scaler`.
 
-        `self._transformer` may implement a `Pipeline`.
+        `self._scaler` may implement a `Pipeline`.
 
         Returns:
             The transformed data.
         """
         self.fit(x)
-        return self._transformer.transform(x)
+        return self._scaler.transform(x)
 
     def inverse_transform(self, x):
         """
         Inverse the transformation that has been applied by `self.fit_transform()`. In fact, this is a wrapper for the
-        `inverse_transform` function of `self._transformer`, followed by a filter that clips the returned values.
+        `inverse_transform` function of `self._scaler`, followed by a filter that clips the returned values.
 
         Args:
             x: The input data to be reconstructed (NumPy array).
@@ -116,13 +147,18 @@ class ctdCluster:
         Returns:
             The reconstructed data.
         """
-        if self._transformer is not None:
-            reconstructed_data = self._transformer.inverse_transform(x)
+
+        if self._scaler is not None:
+            x_cont = x[:, self._continuous_columns]
+            reconstructed_data = self._scaler.inverse_transform(x_cont)
+
+            if self._clip:
+                np.clip(reconstructed_data, self._min, self._max, out=reconstructed_data)
+
+            for d_col in self._discrete_columns:
+                reconstructed_data = np.insert(reconstructed_data, d_col, x[:, d_col], axis=1)
         else:
             reconstructed_data = x.copy()
-
-        if self._clip:
-            np.clip(reconstructed_data, self._min, self._max, out=reconstructed_data)
 
         return reconstructed_data
 
@@ -161,29 +197,36 @@ class ctdCluster:
 
 
 class ctdClusterer:
-    """ A data preprocessing object for ctdGAN. It partitions the input (real) space into clusters and then
-    it transforms the cluster data in numerous ways (scaling, normalization, variance maximization via PCA).
+    """  ctdGAN data preprocessor.
+
+    It partitions the real space into clusters; then, it transforms the data of each cluster.
     """
-    def __init__(self, max_clusters=10, data_transformer='None', samples_per_class=(), random_state=0):
+    def __init__(self, max_clusters=10, scaler=None, samples_per_class=(), embedding_dim=32,
+                 continuous_columns=(), discrete_columns=(), random_state=0):
         """
-        ctdClusterer initializer.
+        Initializer
 
         Args:
             max_clusters (int): The maximum number of clusters to create
-            data_transformer (string): A descriptor that defines a transformation on the cluster's data. Values:
+            scaler (string): A descriptor that defines a transformation on the cluster's data. Values:
 
-              * '`None`' : No transformation takes place; the data is considered immutable
-              * '`stds`' : Standard scaler
-              * '`mms`'  : Min-Max scaler
-              * '`pca`' : Principal Component Analysis
-              * '`pca-mms`'  : Principal Component Analysis followed by Min-Max normalization
+              * '`None`'  : No transformation takes place; the data is considered immutable
+              * '`stds`'  : Standard scaler
+              * '`mms01`' : Min-Max scaler in the range (0,1)
+              * '`mms11`' : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
+            embedding_dim (int): The dimensionality of the latent space (for the probability distribution)
+            continuous_columns (tuple): The continuous columns in the input data
+            discrete_columns (tuple): The columns in the input data that contain categorical variables
             samples_per_class (List or tuple of integers): Contains the number of samples per class
             random_state: Seed the random number generators. Use the same value for reproducible results.
         """
         self._max_clusters = max_clusters
         self._random_state = random_state
+        self._embedding_dim = embedding_dim
+        self._continuous_columns = continuous_columns
+        self._discrete_columns = discrete_columns
 
-        self._transformer = data_transformer
+        self._scaler = scaler
         self.num_clusters_ = 0
         self.clusters_ = []
         self.cluster_labels_ = None
@@ -222,8 +265,10 @@ class ctdClusterer:
             x_u = x_train[self.cluster_labels_ == u, :]
             y_u = y_train[self.cluster_labels_ == u]
 
-            cluster = ctdCluster(label=u, center=cluster_method.cluster_centers_[u], data_transformer=self._transformer,
-                                 clip=True, random_state=self._random_state)
+            cluster = ctdCluster(label=u, center=cluster_method.cluster_centers_[u], scaler=self._scaler,
+                                 clip=True, embedding_dim=self._embedding_dim,
+                                 continuous_columns=self._continuous_columns, discrete_columns=self._discrete_columns,
+                                 random_state=self._random_state)
             cluster.fit(x_u, y_u, len(self._samples_per_class))
 
             x_transformed = cluster.transform(x_u)
@@ -243,7 +288,7 @@ class ctdClusterer:
         if num_classes > 1:
             self.probability_matrix_ = np.zeros((num_classes, self.num_clusters_))
             for c in range(num_classes):
-                class_samples = self._samples_per_class[c]
+                # class_samples = self._samples_per_class[c]
                 # class_probability = class_samples / y_train.shape[0]
                 # print("\nClass:", c, "- Samples:", class_samples, ", Class probability:", class_probability)
 

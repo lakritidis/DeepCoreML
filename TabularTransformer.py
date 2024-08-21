@@ -57,6 +57,7 @@ class TabularTransformer(object):
 
         self.output_info_list = []
         self.output_dimensions = 0
+        self.ohe_dimensions = 0
         self.dataframe = True
 
     def _fit_continuous(self, data):
@@ -128,6 +129,7 @@ class TabularTransformer(object):
         ohe = OneHotEncoder()
         ohe.fit(data, column_name)
         num_categories = len(ohe.dummies)
+        self.ohe_dimensions += num_categories
 
         return ColumnTransformInfo(
             column_name=column_name, column_type='discrete', transform=ohe,
@@ -188,7 +190,7 @@ class TabularTransformer(object):
 
         return output
 
-    def _transform_discrete(self, column_transform_info, data):
+    def transform_discrete(self, column_transform_info, data):
         ohe = column_transform_info.transform
         return ohe.transform(data).to_numpy()
 
@@ -201,10 +203,11 @@ class TabularTransformer(object):
         for column_transform_info in column_transform_info_list:
             column_name = column_transform_info.column_name
             data = raw_data[[column_name]]
+
             if column_transform_info.column_type == 'continuous':
                 column_data_list.append(self._transform_continuous(column_transform_info, data))
             else:
-                column_data_list.append(self._transform_discrete(column_transform_info, data))
+                column_data_list.append(self.transform_discrete(column_transform_info, data))
 
         return column_data_list
 
@@ -221,7 +224,7 @@ class TabularTransformer(object):
             if column_transform_info.column_type == 'continuous':
                 process = delayed(self._transform_continuous)(column_transform_info, data)
             else:
-                process = delayed(self._transform_discrete)(column_transform_info, data)
+                process = delayed(self.transform_discrete)(column_transform_info, data)
             processes.append(process)
 
         return Parallel(n_jobs=-1)(processes)
@@ -325,3 +328,5 @@ class TabularTransformer(object):
             'value_id': np.argmax(one_hot)
         }
 
+    def get_column_transform_info_list(self):
+        return self._column_transform_info_list

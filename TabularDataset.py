@@ -8,7 +8,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
+from sklearn.preprocessing import LabelEncoder
 from sklearn.datasets import make_classification
 from sklearn.model_selection import cross_validate
 from sklearn.metrics import make_scorer
@@ -61,8 +61,7 @@ class TabularDataset(Dataset):
             self.categorical_columns = None
         else:
             self.categorical_columns = list(categorical_columns)
-            self._label_encoders = [OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-                                    for _ in range(len(self.categorical_columns))]
+            self._label_encoders = [LabelEncoder() for _ in range(len(self.categorical_columns))]
 
         self._class_encoder = LabelEncoder()
         self.x_ = None
@@ -114,7 +113,7 @@ class TabularDataset(Dataset):
         """
         file_extension = pathlib.Path(path).suffix
         if file_extension == '.csv':
-            self._raw_df = pd.read_csv(path, encoding='utf-8', keep_default_na=True, na_values=['<null>'])
+            self._raw_df = pd.read_csv(path, encoding='utf-8', keep_default_na=True, na_values="<null>")
         else:
             self._raw_df = self.get_df(path)
 
@@ -284,12 +283,14 @@ class TabularDataset(Dataset):
                 # Generate the appropriate number of samples to equalize cls with the majority class.
                 # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
                 if sampler.short_name_ == "GCOP" or sampler.short_name_ == "CTGAN" or sampler.short_name_ == "TVAE":
+
                     reference_data = pd.DataFrame(data={str(self.class_column): [cls] * samples_to_generate})
                     generated_samples = sampler.sampler_.sample_remaining_columns(
                         max_tries_per_batch=500, known_columns=reference_data).iloc[:, 0:self.dimensionality]
 
-                elif sampler.short_name_ == "GAAN":
-                    generated_samples = sampler.sampler_.sample(samples_to_generate, cls)
+                elif sampler.short_name_ == "DPCGAN":
+                    generated_samples = sampler.sampler_.sample(
+                        samples_to_generate).iloc[:, 0:self.dimensionality]
 
                 if generated_samples is not None:
                     # print(generated_samples.shape)

@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 import torch
 import torch.nn as nn
@@ -23,19 +24,25 @@ class ctdGAN(BaseGAN):
     cluster and class predictions.
     """
 
-    def __init__(self, embedding_dim=128, discriminator=(128, 128), generator=(256, 256), epochs=300, batch_size=32,
-                 pac=10, lr=2e-4, decay=1e-6, sampling_strategy='auto', max_clusters=20, random_state=0):
+    def __init__(self, discriminator=(128, 128), generator=(256, 256), embedding_dim=128, epochs=300, batch_size=32,
+                 scaler='mms11', pac=1, lr=2e-4, decay=1e-6, sampling_strategy='auto', max_clusters=20, random_state=0):
         """
         ctdGAN initializer
 
         Args:
-            embedding_dim (int): Size of the random sample passed to the Generator.
             discriminator (tuple): a tuple with number of neurons for each fully connected layer of the model's Critic.
                 It determines the dimensionality of the output of each layer.
             generator (tuple): a tuple with number of neurons for each fully connected layer of the model's Generator.
                 It determines the dimensionality of the output of each residual block of the Generator.
+            embedding_dim (int): Size of the random sample passed to the Generator.
             epochs (int): The number of training epochs.
             batch_size (int): The number of data instances per training batch.
+            scaler (string): A descriptor that defines a transformation on the cluster's data. Values:
+
+              * '`None`'  : No transformation takes place; the data is considered immutable
+              * '`stds`'  : Standard scaler
+              * '`mms01`' : Min-Max scaler in the range (0,1)
+              * '`mms11`' : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
             pac (int): The number of samples to group together when applying the Critic.
             lr (real): The value of the learning rate parameter for the Generator/Critic Adam optimizers.
             decay (real): The value of the weight decay parameter for the Generator/Critic Adam optimizers.
@@ -49,6 +56,11 @@ class ctdGAN(BaseGAN):
         super().__init__(embedding_dim, discriminator, generator, pac, None, False, epochs,
                          batch_size, lr, decay, sampling_strategy, random_state)
 
+        if scaler != 'mms11' and scaler != 'mms01' and scaler != 'stds':
+            self._scaler = 'mms11'
+        else:
+            self._scaler = scaler
+
         # clustered_transformer performs clustering and (optionally), data transformation
         self._clustered_transformer = None
 
@@ -57,6 +69,7 @@ class ctdGAN(BaseGAN):
 
         self._max_clusters = max_clusters
         self._n_clusters = 0
+        self._categorical_columns = []
 
     def _apply_activate(self, data):
         """Apply proper activation function to the output of the generator."""
@@ -78,44 +91,45 @@ class ctdGAN(BaseGAN):
 
         return torch.cat(data_t, dim=1)
 
-    def cluster_transform(self, x_train, y_train, discrete_columns):
+    def cluster_transform(self, x_train, y_train, categorical_columns):
         """
         Perform clustering and (optionally) transform the data in the generated clusters.
 
         Args:
             x_train: The training data instances.
             y_train: The classes of the training data instances.
-            discrete_columns: The discrete columns in the dataset. The last two columns indicate the cluster and class.
+            categorical_columns: The discrete columns in the dataset. The last 2 columns indicate the cluster and class.
 
         Returns:
             A tensor with the preprocessed data.
         """
+        self._categorical_columns = list(categorical_columns)
         self._n_classes = len(set(y_train))
         self._input_dim = x_train.shape[1]
+        continuous_columns = [c for c in range(self._input_dim) if c not in self._categorical_columns]
 
         # ====== Initialize and deploy the Clustered Transformer object that: i) partitions the real space, and
         # ====== ii) performs data transformations (scaling, PCA, outlier detection, etc.)
         self._samples_per_class = np.unique(y_train, return_counts=True)[1]
 
-        self._clustered_transformer = ctdClusterer(max_clusters=self._max_clusters, data_transformer='stds',
+        self._clustered_transformer = ctdClusterer(max_clusters=self._max_clusters, scaler=self._scaler,
                                                    samples_per_class=self._samples_per_class,
-                                                   random_state=self._random_state)
+                                                   continuous_columns=tuple(continuous_columns),
+                                                   discrete_columns=tuple(self._categorical_columns),
+                                                   embedding_dim=self.embedding_dim_, random_state=self._random_state)
 
         train_data = self._clustered_transformer.perform_clustering(x_train, y_train, self._n_classes)
         self._n_clusters = self._clustered_transformer.num_clusters_
 
-        # print("Training Data:\n", train_data)
-        # ====== Append the cluster and class labels to the collection of the discrete columns
-        discrete_columns.append(self._input_dim)
-        discrete_columns.append(self._input_dim + 1)
+        # ====== Append the cluster and class labels to the collection of discrete columns
+        self._categorical_columns.append(self._input_dim)
+        self._categorical_columns.append(self._input_dim + 1)
 
         # ====== Transform the discrete columns only; the continuous columns have been scaled at cluster-level.
         self._discrete_transformer = TabularTransformer(cont_normalizer='none', clip=True)
-        self._discrete_transformer.fit(train_data, discrete_columns)
+        self._discrete_transformer.fit(train_data, self._categorical_columns)
 
         ret_data = self._discrete_transformer.transform(train_data)
-        # print("Returning Data:\n", ret_data)
-        # inp = input('STATEMENT')
 
         return ret_data
 
@@ -133,25 +147,41 @@ class ctdGAN(BaseGAN):
              * `latent_clusters_ohe` :  One-hot-encoded latent clusters.
              * `latent_classes_ohe:` :  One-hot-encoded latent classes.
         """
-        # Select num_samples random classes and clusters.
-        latent_classes = torch.from_numpy(np.random.randint(0, self._n_classes, num_samples)).to(torch.int64)
-        latent_clusters = torch.from_numpy(np.random.randint(0, self._n_clusters, num_samples)).to(torch.int64)
-        latent_vectors = []
+        num_cols = len(self._discrete_transformer.output_info_list)
+        col = 0
+
+        # === Discrete variables - Simple random one-hot-encoded integers
+        latent_disc = []
+        latent_clusters = []
+        for column_metadata in self._discrete_transformer.output_info_list:
+            for span_info in column_metadata:
+                col += 1
+                if span_info.activation_fn == 'softmax':
+                    col_length = span_info.dim
+
+                    # random_numbers = torch.from_numpy(np.random.randint(0, col_length, num_samples)).to(torch.int64)
+                    random_numbers = torch.randint(low=0, high=col_length, size=(1, num_samples))[0]
+                    # print("Random:", random_numbers)
+                    z_disc = nn.functional.one_hot(random_numbers, num_classes=col_length)
+                    if col == num_cols - 1:
+                        latent_clusters = random_numbers.to(torch.int64)
+                    latent_disc.append(z_disc)
+
+        latent_disc = torch.hstack(latent_disc).to(self._device)
+
+        # === Continuous variables - Sample from the corresponding Normal distribution of each cluster.
+        latent_cont = []
         for s in range(num_samples):
             latent_cluster_object = self._clustered_transformer.get_cluster(latent_clusters[s])
-            z = latent_cluster_object.sample()
-            latent_vectors.append(z)
+            z_cont = latent_cluster_object.sample()
+            latent_cont.append(z_cont)
 
-        # Convert the matrix with the latent vectors to a pytorch tensor:
-        latent_vectors = torch.from_numpy(np.array(latent_vectors, dtype="float32"))
+        # Convert the list of the latent vectors (tensors) to a pytorch tensor:
+        latent_cont = torch.stack(latent_cont).to(self._device)
 
-        # One-hot encoded clusters and classes:
-        latent_classes_ohe = nn.functional.one_hot(latent_classes, num_classes=self._n_classes)
-        latent_clusters_ohe = nn.functional.one_hot(latent_clusters, num_classes=self._n_clusters)
+        return latent_cont, latent_disc
 
-        return latent_vectors, latent_clusters_ohe, latent_classes_ohe
-
-    def generator_loss(self, critic_output, real_data, latent_data, generated_data):
+    def generator_loss(self, critic_output, latent_disc_data, generated_data):
         """Generator loss function
 
         The loss function of the Generator combines the Discriminator Loss, and the mis-predictions of
@@ -159,24 +189,24 @@ class ctdGAN(BaseGAN):
 
         Args:
             critic_output: The output of the Discriminator.
-            real_data: The real data in the batch.
-            latent_data: The data where the Generator sampled from.
+            latent_disc_data: The discrete latent data where the Generator sampled from.
             generated_data: The data generated by the Generator.
         """
         num_generated_samples = generated_data.size()[0]
 
-        # cluster_st_idx = self._discrete_transformer.output_dimensions - self._n_clusters - self._n_classes
-        # cluster_ed_idx = cluster_st_idx + self._n_clusters
+        cluster_st_idx = self._discrete_transformer.output_dimensions - self._n_clusters - self._n_classes
+        cluster_ed_idx = cluster_st_idx + self._n_clusters
         # print("Cluster st:", cluster_st_idx, ", Cluster ed:", cluster_ed_idx)
 
-        # class_st_idx = self._discrete_transformer.output_dimensions - self._n_classes
-        # class_ed_idx = class_st_idx + self._n_classes
+        class_st_idx = self._discrete_transformer.output_dimensions - self._n_classes
+        class_ed_idx = class_st_idx + self._n_classes
         # print("Class st:", class_st_idx, ", Class ed:", class_ed_idx)
 
         # Loss for the discrete columns - Including the class & cluster labels.
         # print("Real data shape", real_data.shape, " - Latent data shape", latent_data.shape)
         discrete_loss = []
         st_idx = 0
+        st_disc_idx = 0
         for column_metadata in self._discrete_transformer.output_info_list:
             for span_info in column_metadata:
                 if len(column_metadata) != 1 or span_info.activation_fn != 'softmax':
@@ -184,48 +214,44 @@ class ctdGAN(BaseGAN):
                     st_idx += span_info.dim
                 else:
                     ed_idx = st_idx + span_info.dim
+                    ed_disc_idx = st_disc_idx + span_info.dim
 
-                    # print("\tStart:", st_idx, ", End: ", ed_idx)
-                    # print("\t== Latent Data:\n", latent_data[:, st_idx:ed_idx])
-                    # print("\t== Generated Data:\n", generated_data[:, st_idx:ed_idx])
+                    # print("\t== Latent Discrete Data:\nStart:", st_disc_idx, ", End:", ed_disc_idx, "\nData:\n",
+                    #       latent_disc_data[:, st_disc_idx:ed_disc_idx])
+                    # print("\t== Generated Discrete Data:\nStart:", st_idx, ", End:", ed_idx, "\nData:\n",
+                    #       generated_data[:, st_idx:ed_idx])
 
-                    tmp = nn.functional.cross_entropy(
-                        generated_data[:, st_idx:ed_idx],
-                        torch.argmax(latent_data[:, st_idx:ed_idx], dim=1), reduction='none')
+                    gen_d = generated_data[:, st_idx:ed_idx]
+                    gen_c = torch.argmax(gen_d, dim=1)
+
+                    lat_d = latent_disc_data[:, st_disc_idx:ed_disc_idx]
+                    lat_c = torch.argmax(lat_d, dim=1)
+
+                    # Penalize mis-clusters more heavily and in a dynamic manner
+                    if st_idx == cluster_st_idx and ed_idx == cluster_ed_idx:
+                        # print("Lat Clusters:\n", lat_d, "(", lat_c, ")", "\nGen Clusters:\n", gen_d, "(", gen_c, ")")
+
+                        mis_clustering = np.sum([1 for i in range(num_generated_samples) if gen_c[i] != lat_c[i]])
+                        beta = 1 + mis_clustering / num_generated_samples
+
+                        tmp = beta * nn.functional.cross_entropy(gen_d, lat_c, reduction='none')
+                        # print(beta)
+
+                    # Penalize mis-classifications more heavily
+                    elif st_idx == class_st_idx and ed_idx == class_ed_idx:
+                        tmp = ((len(self._categorical_columns) - 1) *
+                               nn.functional.cross_entropy(gen_d, lat_c, reduction='none'))
+                    else:
+                        tmp = nn.functional.cross_entropy(gen_d, lat_c, reduction='none')
 
                     discrete_loss.append(tmp)
+
                     st_idx = ed_idx
+                    st_disc_idx = ed_disc_idx
 
         cond_loss = torch.stack(discrete_loss, dim=1)
         discrete_columns_loss = cond_loss.sum() / num_generated_samples
         # print("discrete_columns_loss = ", discrete_columns_loss)
-
-        # Real data
-        real_vectors = real_data[:, 0: self._input_dim]
-        real_clusters = real_data[:, self._input_dim: (self._input_dim + self._n_clusters)]
-
-        # Latent data
-        # latent_vectors = latent_data[:, 0: self._input_dim]
-        latent_clusters = latent_data[:, self._input_dim: (self._input_dim + self._n_clusters)]
-
-        # Generated data
-        generated_vectors = generated_data[:, 0:self._input_dim]
-        generated_clusters = generated_data[:, self._input_dim:(self._input_dim + self._n_clusters)]
-
-        # Mis-classification error: Binary Cross Entropy between predicted (from the Discriminator) and real labels.
-        # classification_error = nn.BCELoss(reduction='mean')(predicted_labels, real_labels)
-
-        # Mis-clustering error: Difference between the generated and latent cluster labels.
-        clustering_error = 0
-        for i in range(num_generated_samples):
-            u_l = torch.argmax(latent_clusters[i, :])
-            u_g = torch.argmax(generated_clusters[i, :])
-
-            if u_l != u_g:
-                latent_centroid = self._clustered_transformer.get_cluster_center(u_l)
-                # clustering_error += (generated_vectors[i] - latent_centroid) ** 2
-
-        clustering_error /= num_generated_samples
 
         gen_loss = -torch.mean(critic_output) + discrete_columns_loss
 
@@ -241,10 +267,10 @@ class ctdGAN(BaseGAN):
             generated_data: The data generated by the Generator.
         """
 
-        real_data_q = torch.mean(self.D_(real_data))
-        generated_data_q = torch.mean(self.D_(generated_data))
+        real_data_quality = torch.mean(self.D_(real_data))
+        generated_data_quality = torch.mean(self.D_(generated_data))
 
-        return -(real_data_q - generated_data_q)
+        return -(real_data_quality - generated_data_quality)
 
     def train_batch(self, real_data):
         """
@@ -263,12 +289,13 @@ class ctdGAN(BaseGAN):
 
         packed_samples = num_samples // self.pac_
 
-        # DISCRIMINATOR TRAINING
         real_data = real_data.to(torch.float).to(self._device)
 
-        # Take samples from the latent space
-        latent_vectors, latent_clusters, latent_classes = self.sample_latent_space(packed_samples)
-        latent_data = torch.cat((latent_vectors, latent_clusters, latent_classes), dim=1).to(self._device)
+        # DISCRIMINATOR TRAINING
+        with torch.no_grad():
+            # Take samples from the latent space
+            latent_cont, latent_disc = self.sample_latent_space(packed_samples)
+            latent_data = torch.cat((latent_cont, latent_disc), dim=1)
 
         # Pass the latent samples through the Generator and generate fake samples.
         # Apply a dual activation function: tanh for the continuous columns, softmax for the discrete ones.
@@ -279,33 +306,34 @@ class ctdGAN(BaseGAN):
         pen = self.D_.calc_gradient_penalty(real_data, generated_data, self._device, self.pac_)
         disc_loss = self.discriminator_loss(real_data, generated_data)
 
-        self.D_optimizer_.zero_grad(set_to_none=False)
+        self.D_optimizer_.zero_grad(set_to_none=True)
         pen.backward(retain_graph=True)
         disc_loss.backward()
         self.D_optimizer_.step()
 
         # GENERATOR TRAINING
         # Sample data from the latent spaces
-        latent_vectors, latent_clusters, latent_classes = self.sample_latent_space(packed_samples)
-        latent_data = torch.cat((latent_vectors, latent_clusters, latent_classes), dim=1).to(self._device)
+        with torch.no_grad():
+            latent_cont, latent_disc = self.sample_latent_space(packed_samples)
+            latent_data = torch.cat((latent_cont, latent_disc), dim=1)
 
         # Pass the latent data through the Generator to synthesize samples
         generated_data = self._apply_activate(self.G_(latent_data))
 
         # Reshape the data to feed it to Discriminator ( (num_samples, dimensionality) -> ( -1, pac * dimensionality )
-        generated_data = generated_data.reshape((-1, self.pac_ * self._discrete_transformer.output_dimensions))
+        # generated_data = generated_data.reshape((-1, self.pac_ * self._discrete_transformer.output_dimensions))
 
         # Compute and back propagate the Generator loss
         d_predictions = self.D_(generated_data)
-        gen_loss = self.generator_loss(d_predictions, real_data, latent_data, generated_data)
+        gen_loss = self.generator_loss(d_predictions, latent_disc, generated_data)
 
-        self.G_optimizer_.zero_grad(set_to_none=False)
+        self.G_optimizer_.zero_grad(set_to_none=True)
         gen_loss.backward()
         self.G_optimizer_.step()
 
         return disc_loss, gen_loss
 
-    def train(self, x_train, y_train, store_losses=None):
+    def train(self, x_train, y_train, categorical_columns=(), store_losses=None):
         """
         Conventional training process of a Cluster GAN. The Generator and the Discriminator are trained
         simultaneously in the traditional adversarial fashion by optimizing `loss_function`.
@@ -313,6 +341,7 @@ class ctdGAN(BaseGAN):
         Args:
             x_train: The training data instances (NumPy array).
             y_train: The classes of the training data instances (NumPy array).
+            categorical_columns: The columns to be considered as categorical
             store_losses: The file path where the values of the Discriminator and Generator loss functions are stored.
         """
 
@@ -321,20 +350,12 @@ class ctdGAN(BaseGAN):
         batch_size = factor * self.pac_
 
         # Prepare the data for training (Clustering, Computation of Probability Distributions, Transformations, etc.)
-        training_data = self.cluster_transform(x_train, y_train, discrete_columns=[])
-
-        # ############################################
-        # LIMITATION: The latent space must be of equal dimensionality as the data space
-        self.embedding_dim_ = self._input_dim
-        # ############################################
-
+        training_data = self.cluster_transform(x_train, y_train, categorical_columns=categorical_columns)
         train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 
-        # real_space_dimensions = self._input_dim + self._n_clusters + self._n_classes
         real_space_dimensions = self._discrete_transformer.output_dimensions
-        latent_space_dimensions = self.embedding_dim_ + self._n_clusters + self._n_classes
+        latent_space_dimensions = self.embedding_dim_ + self._discrete_transformer.ohe_dimensions
 
-        # self.D_ = PackedDiscriminator(self.D_Arch_, input_dim=real_space_dimensions, pac=self.pac_).to(self._device)
         self.D_ = Critic(input_dim=real_space_dimensions, discriminator_dim=self.D_Arch_,
                          pac=self.pac_).to(self._device)
 
@@ -361,8 +382,8 @@ class ctdGAN(BaseGAN):
             self.plot_losses(losses, store_losses)
 
     def fit(self, x_train, y_train):
-        """`fit` invokes the GAN training process. `fit` renders the CGAN class compatible with `imblearn`'s interface,
-        allowing its usage in over-sampling/under-sampling pipelines.
+        """`fit` invokes the GAN training process. `fit` renders the ctdGAN class compatible with `imblearn`'s
+        interface, allowing its usage in over-sampling/under-sampling pipelines.
 
         Args:
             x_train: The training data instances.
@@ -380,68 +401,94 @@ class ctdGAN(BaseGAN):
         Returns:
             Artificial data instances created by the Generator.
         """
+        num_cols = len(self._discrete_transformer.output_info_list)
+        column_transform_info_list = self._discrete_transformer.get_column_transform_info_list()
+
         # If no specific class is required, pick classes randomly.
         if y is None:
-            latent_classes = torch.from_numpy(np.random.randint(0, self._n_classes, num_samples)).to(torch.int64)
+            latent_classes = np.random.randint(low=0, high=self._n_classes, size=num_samples)
         # Otherwise, fill the classes tensor with the requested class (y) value
         else:
-            latent_classes = torch.full(size=(num_samples,), fill_value=y)
+            latent_classes = np.full(shape=num_samples, fill_value=y)
 
-        latent_classes_ohe = nn.functional.one_hot(latent_classes, num_classes=self._n_classes)
+        latent_clusters = np.zeros(shape=num_samples)
 
-        # Select the cluster with probability self._cc_prob_vector
-        latent_clusters = np.zeros(num_samples)
-        latent_clusters_objs = []
-        latent_x = []
+        # Select random integer values for the discrete variables. These values will be later one-hot-encoded.
+        latent_disc = []
+        latent_cont = []
+        col = 0
+        column_labels = []
+        for column_metadata in self._discrete_transformer.output_info_list:
+            col = col + 1
+            for span_info in column_metadata:
+                if span_info.activation_fn == 'softmax':
+                    column_labels.append(str(col - 1))
+                    col_length = span_info.dim
+
+                    if col < num_cols - 1:
+                        random_discrete_vals = np.random.randint(low=0, high=col_length, size=num_samples)
+                        latent_disc.append(random_discrete_vals)
 
         # For each sample with a specific class, pick a cluster with probability lat_subspace.get_cluster_probs().
-        # Then build the latent sample vector by sampling the (Multivariate) Gaussian that describes this cluster.)
+        # In the same time, sample the probability distribution of each cluster to get the latent representation of
+        # the continuous variables.
+        latent_clusters_objs = []
         for s in range(num_samples):
             lat_class = int(latent_classes[s])
-
-            # Access the cluster probability matrix: Given a class, find a suitable cluster to sample from.
             p_matrix = self._clustered_transformer.probability_matrix_[lat_class]
 
-            lat_cluster = np.random.choice(a=np.arange(self._n_clusters, dtype=int), size=1, replace=True, p=p_matrix)
-            latent_cluster_object = self._clustered_transformer.get_cluster(int(lat_cluster))
+            # Select the cluster with probability self._cc_prob_vector
+            latent_clusters[s] = np.random.choice(
+                a=np.arange(self._n_clusters, dtype=int), size=None, replace=True, p=p_matrix)
+
+            latent_cluster_object = self._clustered_transformer.get_cluster(int(latent_clusters[s]))
             latent_clusters_objs.append(latent_cluster_object)
-            latent_clusters[s] = latent_cluster_object.get_label()
-            # print("Sample", s, "-- Class", int(latent_classes[s]), '--Cluster', int(lat_cluster), "(",
-            #      latent_clusters[s], ")\n-- Prob Vec:", lat_subspace.get_cluster_probs())
 
-            # latent_x derives by sampling the cluster's Multivariate Gaussian distribution
-            z = latent_cluster_object.sample()
-            latent_x.append(z)
+            latent_cont.append(latent_cluster_object.sample())
 
-        latent_x = torch.from_numpy(np.array(latent_x, dtype="float32"))
+        # Put all discrete variables together into the same matrix (including the class and cluster labels)
+        latent_disc.append(latent_clusters)
+        latent_disc.append(latent_classes)
+        latent_disc = pd.DataFrame(np.stack(latent_disc, axis=1), columns=column_labels)
 
-        latent_clusters = torch.from_numpy(latent_clusters).to(torch.int64)
-        latent_clusters_ohe = nn.functional.one_hot(latent_clusters, num_classes=self._n_clusters)
-        latent_y = torch.cat((latent_clusters_ohe, latent_classes_ohe), dim=1)
+        # Now one-hot-encode the discrete variables by using the OneHotEncoders that were used during training
+        latent_disc_ohe = []
+        for column_transform_info in column_transform_info_list:
+            if column_transform_info.column_type != 'continuous':
+                column_name = column_transform_info.column_name
+                data = latent_disc[[column_name]]
+                one_hot_data = self._discrete_transformer.transform_discrete(column_transform_info, data)
+                latent_disc_ohe.append(one_hot_data)
 
-        # Concatenate, copy to device, and pass to generator
-        latent_data = torch.cat((latent_x, latent_y), dim=1).to(self._device)
+        # Create the discrete and continuous tensors.
+        latent_disc_ohe = torch.tensor(np.hstack(latent_disc_ohe))
+        latent_cont = torch.tensor(np.vstack(latent_cont))
+
+        # Concatenate the continuous with the discrete variables
+        latent_data = torch.cat((latent_cont, latent_disc_ohe), dim=1).to(self._device)
 
         # Generate data from the model's Generator - The activation function depends on the variable type:
         # - Hyperbolic tangent for continuous variables
         # - Softmax for discrete variables
         generated_data = self._apply_activate(self.G_(latent_data)).cpu().detach().numpy()
-
-        # Throw away the generated cluster and generated class.
-        # generated_samples = generated_data[:, 0:self.embedding_dim_].cpu().detach().numpy()
-        generated_samples = self._discrete_transformer.inverse_transform(generated_data)[:, 0:self.embedding_dim_]
+        generated_samples = self._discrete_transformer.inverse_transform(generated_data)
 
         # Inverse the transformation of the generated samples. First inverse the transformation of the continuous
         # variables that have been encoded according to the cluster the sample belongs.
-        reconstructed_samples = np.zeros((num_samples, self.embedding_dim_))
+        reconstructed_samples = []
         for s in range(num_samples):
             z = generated_samples[s].reshape(1, -1)
-            reconstructed_samples[s] = latent_clusters_objs[s].inverse_transform(z)
+            reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
+            # print("Sample", s, "- Gen:", z, " ===>", reconstructed_sample)
 
+            reconstructed_samples.append(reconstructed_sample)
+
+        reconstructed_samples = np.vstack(reconstructed_samples)
         # print("Reconstructed samples\n", reconstructed_samples)
+
         return reconstructed_samples
 
-    def fit_resample(self, x_train, y_train):
+    def fit_resample(self, x_train, y_train, categorical_columns=()):
         """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. The function renders sbGAN
         compatible with the `imblearn`'s interface, allowing its usage in over-sampling/under-sampling pipelines.
 
@@ -454,6 +501,7 @@ class ctdGAN(BaseGAN):
         Args:
             x_train: The training data instances.
             y_train: The classes of the training data instances.
+            categorical_columns: The columns to be considered as categorical
 
         Returns:
             x_resampled: The training data instances + the generated data instances.
@@ -461,13 +509,13 @@ class ctdGAN(BaseGAN):
         """
 
         # Train the GAN with the input data
-        # self.train(x_train, y_train, store_losses=paths.output_path_loss)
-        self.train(x_train, y_train, store_losses=None)
+        self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=paths.output_path_loss)
+        # self.train(x_train, y_train, store_losses=None)
 
         x_resampled = np.copy(x_train)
         y_resampled = np.copy(y_train)
 
-        # auto mode: Use sbGAN to equalize the number of samples per class. This is achieved by generating samples
+        # auto mode: Use ctdGAN to equalize the number of samples per class. This is achieved by generating samples
         # of the minority classes (i.e. we perform oversampling).
         if self._sampling_strategy == 'auto':
             majority_class = np.array(self._samples_per_class).argmax()

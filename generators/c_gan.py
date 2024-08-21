@@ -156,7 +156,7 @@ class cGAN(BaseGAN):
         factor = self._batch_size // self.pac_
         batch_size = factor * self.pac_
 
-        self._transformer = TabularTransformer(cont_normalizer='ss')
+        self._transformer = TabularTransformer(cont_normalizer='stds')
         self._transformer.fit(x_train)
         x_train = self._transformer.transform(x_train)
 
