@@ -151,10 +151,11 @@ sdd_datasets = {
 }
 
 # datasets_cat = {'vowel': {'path': id_path + 'vowel0_test.csv', 'categorical_cols': (0, 1, 2), 'class_col': 13} }
-
 # eval_methods.test_model('CTDGAN', datasets_cat['vowel'], seed)
 
-eval_methods.eval_resampling(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
+eval_methods.test_model('CTDGAN', datasets_imb['ecoli3'], seed)
+
+# eval_methods.eval_resampling(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
 # eval_methods.eval_detectability(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
 
 # eval_methods.eval_ml_efficacy(datasets, num_threads, seed)

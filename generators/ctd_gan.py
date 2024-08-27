@@ -126,7 +126,7 @@ class ctdGAN(BaseGAN):
         self._categorical_columns.append(self._input_dim + 1)
 
         # ====== Transform the discrete columns only; the continuous columns have been scaled at cluster-level.
-        self._discrete_transformer = TabularTransformer(cont_normalizer='none', clip=True)
+        self._discrete_transformer = TabularTransformer(cont_normalizer='none', clip=False)
         self._discrete_transformer.fit(train_data, self._categorical_columns)
 
         ret_data = self._discrete_transformer.transform(train_data)
@@ -161,8 +161,8 @@ class ctdGAN(BaseGAN):
 
                     # random_numbers = torch.from_numpy(np.random.randint(0, col_length, num_samples)).to(torch.int64)
                     random_numbers = torch.randint(low=0, high=col_length, size=(1, num_samples))[0]
-                    # print("Random:", random_numbers)
                     z_disc = nn.functional.one_hot(random_numbers, num_classes=col_length)
+
                     if col == num_cols - 1:
                         latent_clusters = random_numbers.to(torch.int64)
                     latent_disc.append(z_disc)
@@ -224,7 +224,7 @@ class ctdGAN(BaseGAN):
                     gen_d = generated_data[:, st_idx:ed_idx]
                     gen_c = torch.argmax(gen_d, dim=1)
 
-                    lat_d = latent_disc_data[:, st_disc_idx:ed_disc_idx]
+                    lat_d = latent_disc_data[:, st_disc_idx:ed_disc_idx].to(dtype=torch.float)
                     lat_c = torch.argmax(lat_d, dim=1)
 
                     # Penalize mis-clusters more heavily and in a dynamic manner
@@ -232,15 +232,25 @@ class ctdGAN(BaseGAN):
                         # print("Lat Clusters:\n", lat_d, "(", lat_c, ")", "\nGen Clusters:\n", gen_d, "(", gen_c, ")")
 
                         mis_clustering = np.sum([1 for i in range(num_generated_samples) if gen_c[i] != lat_c[i]])
-                        beta = 1 + mis_clustering / num_generated_samples
+                        beta = 1.0
 
-                        tmp = beta * nn.functional.cross_entropy(gen_d, lat_c, reduction='none')
+                        if self._n_clusters == 2:
+                            tmp = beta * nn.functional.binary_cross_entropy(gen_d, lat_d, reduction='none')[:, 0]
+                        else:
+                            tmp = beta * nn.functional.cross_entropy(gen_d, lat_c, reduction='none')
+                        # tmp = torch.zeros((num_generated_samples, )).to(self._device)
                         # print(beta)
 
                     # Penalize mis-classifications more heavily
                     elif st_idx == class_st_idx and ed_idx == class_ed_idx:
-                        tmp = ((len(self._categorical_columns) - 1) *
-                               nn.functional.cross_entropy(gen_d, lat_c, reduction='none'))
+                        mis_classified = np.sum([1 for i in range(num_generated_samples) if gen_c[i] != lat_c[i]])
+
+                        # gamma = len(self._categorical_columns) * (1.0 + mis_classified / num_generated_samples)
+                        gamma = len(self._categorical_columns)
+                        if self._n_classes == 2:
+                            tmp = gamma * nn.functional.binary_cross_entropy(gen_d, lat_d, reduction='none')[:, 0]
+                        else:
+                            tmp = gamma * nn.functional.cross_entropy(gen_d, lat_c, reduction='none')
                     else:
                         tmp = nn.functional.cross_entropy(gen_d, lat_c, reduction='none')
 
@@ -466,6 +476,8 @@ class ctdGAN(BaseGAN):
 
         # Concatenate the continuous with the discrete variables
         latent_data = torch.cat((latent_cont, latent_disc_ohe), dim=1).to(self._device)
+        # print(latent_classes)
+        # print("Latent:", latent_data)
 
         # Generate data from the model's Generator - The activation function depends on the variable type:
         # - Hyperbolic tangent for continuous variables
@@ -476,8 +488,18 @@ class ctdGAN(BaseGAN):
         # Inverse the transformation of the generated samples. First inverse the transformation of the continuous
         # variables that have been encoded according to the cluster the sample belongs.
         reconstructed_samples = []
+        correct_classes, correct_clusters = 0, 0
         for s in range(num_samples):
             z = generated_samples[s].reshape(1, -1)
+
+            generated_class = z[0, z.shape[1]-1]
+            generated_cluster = z[0, z.shape[1]-2]
+
+            if generated_class == y:
+                correct_classes += 1
+            if generated_cluster == latent_clusters[s]:
+                correct_clusters += 1
+
             reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
             # print("Sample", s, "- Gen:", z, " ===>", reconstructed_sample)
 
@@ -485,6 +507,8 @@ class ctdGAN(BaseGAN):
 
         reconstructed_samples = np.vstack(reconstructed_samples)
         # print("Reconstructed samples\n", reconstructed_samples)
+
+        print("Correct Clusters: ", correct_clusters, " == ", "Correct Classes:", correct_classes)
 
         return reconstructed_samples
 
@@ -509,8 +533,8 @@ class ctdGAN(BaseGAN):
         """
 
         # Train the GAN with the input data
-        # self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=paths.output_path_loss)
-        self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=None)
+        self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=paths.output_path_loss)
+        # self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=None)
 
         x_resampled = np.copy(x_train)
         y_resampled = np.copy(y_train)

@@ -47,15 +47,15 @@ def test_model(model, dataset, seed):
     elif model == "CTGAN":
         gan = ctGAN(discriminator=(256, 256), generator=(128, 256, 128), pac=1)
     elif model == "CTDGAN":
-        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=1, max_clusters=10, epochs=500, scaler='mms11',
-                     embedding_dim=32, random_state=seed)
+        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=1, max_clusters=10, epochs=300, scaler='mms11',
+                     embedding_dim=128, random_state=seed)
     else:
         print("No model specified")
         exit()
 
     balanced_data = gan.fit_resample(x, y, categorical_columns=dataset['categorical_cols'])
-    print(balanced_data[0].shape)
-    print(balanced_data[0])
+    print("Balanced Data shape:", balanced_data[0].shape)
+    # print(balanced_data[0])
     print("Finished in", time.time() - t_s, "sec")
 
 
