@@ -71,6 +71,30 @@ class ctdGAN(BaseGAN):
         self._n_clusters = 0
         self._categorical_columns = []
 
+    @staticmethod
+    def _gumbel_softmax(logits, tau=1.0, hard=False, eps=1e-10, dim=-1):
+        """Deals with the instability of the gumbel_softmax for older versions of torch.
+
+        For more details about the issue:
+        https://drive.google.com/file/d/1AA5wPfZ1kquaRtVruCd6BiYZGcDeNxyP/view?usp=sharing
+
+        Args:
+            logits (array(…, num_features)): Unnormalized log probabilities
+            tau: Non-negative scalar temperature/
+            hard (bool): If True, the returned samples will be discretized as one-hot vectors,
+                but will be differentiated as if it is the soft sample in autograd
+            dim (int): A dimension along which softmax will be computed. Default: -1.
+
+        Returns:
+            Sampled tensor of same shape as logits from the Gumbel-Softmax distribution.
+        """
+        for _ in range(10):
+            transformed = nn.functional.gumbel_softmax(logits, tau=tau, hard=hard, eps=eps, dim=dim)
+            if not torch.isnan(transformed).any():
+                return transformed
+
+        raise ValueError('gumbel_softmax returning NaN.')
+
     def _apply_activate(self, data):
         """Apply proper activation function to the output of the generator."""
         data_t = []
@@ -83,7 +107,8 @@ class ctdGAN(BaseGAN):
                     st = ed
                 elif span_info.activation_fn == 'softmax':
                     ed = st + span_info.dim
-                    transformed = torch.softmax(data[:, st:ed], dim=1)
+                    # transformed = torch.softmax(data[:, st:ed], dim=1)
+                    transformed = self._gumbel_softmax(data[:, st:ed], tau=0.2)
                     data_t.append(transformed)
                     st = ed
                 else:
@@ -231,8 +256,9 @@ class ctdGAN(BaseGAN):
                     if st_idx == cluster_st_idx and ed_idx == cluster_ed_idx:
                         # print("Lat Clusters:\n", lat_d, "(", lat_c, ")", "\nGen Clusters:\n", gen_d, "(", gen_c, ")")
 
-                        mis_clustering = np.sum([1 for i in range(num_generated_samples) if gen_c[i] != lat_c[i]])
-                        beta = 1.0
+                        mis_clustered = np.sum([1 for i in range(num_generated_samples) if gen_c[i] != lat_c[i]])
+                        beta = 1.0 + mis_clustered / num_generated_samples
+                        # beta = 1.0
 
                         if self._n_clusters == 2:
                             tmp = beta * nn.functional.binary_cross_entropy(gen_d, lat_d, reduction='none')[:, 0]
@@ -243,10 +269,9 @@ class ctdGAN(BaseGAN):
 
                     # Penalize mis-classifications more heavily
                     elif st_idx == class_st_idx and ed_idx == class_ed_idx:
-                        mis_classified = np.sum([1 for i in range(num_generated_samples) if gen_c[i] != lat_c[i]])
+                        # self._categorical_columns = 1 + number of discrete columns (2 is from the class + cluster col)
+                        gamma = len(self._categorical_columns) - 1
 
-                        # gamma = len(self._categorical_columns) * (1.0 + mis_classified / num_generated_samples)
-                        gamma = len(self._categorical_columns)
                         if self._n_classes == 2:
                             tmp = gamma * nn.functional.binary_cross_entropy(gen_d, lat_d, reduction='none')[:, 0]
                         else:
@@ -392,8 +417,7 @@ class ctdGAN(BaseGAN):
             self.plot_losses(losses, store_losses)
 
     def fit(self, x_train, y_train):
-        """`fit` invokes the GAN training process. `fit` renders the ctdGAN class compatible with `imblearn`'s
-        interface, allowing its usage in over-sampling/under-sampling pipelines.
+        """Invokes the GAN training process.
 
         Args:
             x_train: The training data instances.
@@ -401,26 +425,28 @@ class ctdGAN(BaseGAN):
         """
         self.train(x_train, y_train)
 
-    def sample(self, num_samples, y=None):
+    def sample(self, num_samples, y=None, conditions=None):
         """ Create artificial samples using the GAN's Generator.
 
         Args:
-            num_samples: The number of samples to generate.
-            y: The class of the generated samples. If `None`, then samples with random classes are generated.
+            num_samples (int): The number of samples to generate.
+            conditions (dict): A dictionary with conditions on the dataset discrete columns.
+            y (int): A condition on the class of the generated samples.
 
         Returns:
             Artificial data instances created by the Generator.
         """
-        num_cols = len(self._discrete_transformer.output_info_list)
+        num_columns = len(self._discrete_transformer.output_info_list)
         column_transform_info_list = self._discrete_transformer.get_column_transform_info_list()
 
-        # If no specific class is required, pick classes randomly.
+        # If no specific class is required, select random class labels
         if y is None:
             latent_classes = np.random.randint(low=0, high=self._n_classes, size=num_samples)
         # Otherwise, fill the classes tensor with the requested class (y) value
         else:
             latent_classes = np.full(shape=num_samples, fill_value=y)
 
+        # We will determine the appropriate clusters later, according to the classes of the samples
         latent_clusters = np.zeros(shape=num_samples)
 
         # Select random integer values for the discrete variables. These values will be later one-hot-encoded.
@@ -435,7 +461,8 @@ class ctdGAN(BaseGAN):
                     column_labels.append(str(col - 1))
                     col_length = span_info.dim
 
-                    if col < num_cols - 1:
+                    # Discrete variables excluding the class
+                    if col < num_columns - 1:
                         random_discrete_vals = np.random.randint(low=0, high=col_length, size=num_samples)
                         latent_disc.append(random_discrete_vals)
 
@@ -476,14 +503,14 @@ class ctdGAN(BaseGAN):
 
         # Concatenate the continuous with the discrete variables
         latent_data = torch.cat((latent_cont, latent_disc_ohe), dim=1).to(self._device)
-        # print(latent_classes)
-        # print("Latent:", latent_data)
 
-        # Generate data from the model's Generator - The activation function depends on the variable type:
-        # - Hyperbolic tangent for continuous variables
-        # - Softmax for discrete variables
+        # Generate samples by passing the latent data to Generator
         generated_data = self._apply_activate(self.G_(latent_data)).cpu().detach().numpy()
         generated_samples = self._discrete_transformer.inverse_transform(generated_data)
+
+        # print(latent_classes)
+        # print("Latent:", latent_data)
+        # print(generated_samples)
 
         # Inverse the transformation of the generated samples. First inverse the transformation of the continuous
         # variables that have been encoded according to the cluster the sample belongs.
@@ -506,9 +533,8 @@ class ctdGAN(BaseGAN):
             reconstructed_samples.append(reconstructed_sample)
 
         reconstructed_samples = np.vstack(reconstructed_samples)
-        # print("Reconstructed samples\n", reconstructed_samples)
 
-        print("Correct Clusters: ", correct_clusters, " == ", "Correct Classes:", correct_classes)
+        # print("Correct Clusters: ", correct_clusters, " == ", "Correct Classes:", correct_classes)
 
         return reconstructed_samples
 
@@ -533,8 +559,8 @@ class ctdGAN(BaseGAN):
         """
 
         # Train the GAN with the input data
-        self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=paths.output_path_loss)
-        # self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=None)
+        # self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=paths.output_path_loss)
+        self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=None)
 
         x_resampled = np.copy(x_train)
         y_resampled = np.copy(y_train)
@@ -553,7 +579,7 @@ class ctdGAN(BaseGAN):
                     if samples_to_generate > 1:
                         # Generate the appropriate number of samples to equalize cls with the majority class.
                         # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
-                        generated_samples = self.sample(samples_to_generate, cls)
+                        generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
                         generated_classes = np.full(samples_to_generate, cls)
 
                         x_resampled = np.vstack((x_resampled, generated_samples))

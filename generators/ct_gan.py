@@ -522,7 +522,7 @@ class ctGAN(BaseGAN):
         return self.sample_original(n=num_samples, condition_column=str(self._input_dim),
                                     condition_value=y)[:, 0:self._input_dim]
 
-    def fit_resample(self, x_train, y_train):
+    def fit_resample(self, x_train, y_train, categorical_columns=None):
         """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. The function renders ctGAN
         compatible with the `imblearn`'s interface, allowing its usage in over-sampling/under-sampling pipelines.
 
@@ -533,6 +533,7 @@ class ctGAN(BaseGAN):
         - dict: a dictionary that indicates the number of samples to be generated from each class
 
         Args:
+            categorical_columns: Do not use.
             x_train: The training data instances.
             y_train: The classes of the training data instances.
 
@@ -547,8 +548,8 @@ class ctGAN(BaseGAN):
         self._input_dim = x_train.shape[1]
 
         # Train ctGAN
-        # self.train(training_data, discrete_columns=(self._input_dim,), store_losses=paths.output_path_loss)
-        self.train(training_data, discrete_columns=(self._input_dim,), store_losses=None)
+        self.train(training_data, discrete_columns=(self._input_dim,), store_losses=paths.output_path_loss)
+        # self.train(training_data, discrete_columns=(self._input_dim,), store_losses=None)
 
         # One-hot-encode the class labels; Get the number of classes and the number of samples to generate per class.
         class_encoder = OneHotEncoder()

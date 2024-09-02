@@ -16,7 +16,32 @@ sd_path = paths.software_defect_dataset_path
 id_path = paths.imbalanced_dataset_path
 
 
-datasets_imb = {
+datasets = {
+    'ecoli1': {'path': id_path + 'ecoli1.csv', 'categorical_cols': (), 'class_col': 7},
+    'ecoli2': {'path': id_path + 'ecoli2.csv', 'categorical_cols': (), 'class_col': 7},
+    'ecoli3': {'path': id_path + 'ecoli3.csv', 'categorical_cols': (), 'class_col': 7},
+    'ecoli4': {'path': id_path + 'ecoli4.csv', 'categorical_cols': (), 'class_col': 7},
+
+    # 'flare': {'path': id_path + 'flare-F.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 'class_col': 11},
+
+    'glass1': {'path': id_path + 'glass1.csv', 'categorical_cols': (), 'class_col': 9},
+    'glass2': {'path': id_path + 'glass2.csv', 'categorical_cols': (), 'class_col': 9},
+    'glass4': {'path': id_path + 'glass4.csv', 'categorical_cols': (), 'class_col': 9},
+    'glass5': {'path': id_path + 'glass5.csv', 'categorical_cols': (), 'class_col': 9},
+    'glass6': {'path': id_path + 'glass6.csv', 'categorical_cols': (), 'class_col': 9},
+
+    'pima': {'path': id_path + 'pima.csv', 'categorical_cols': (), 'class_col': 8},
+
+    'vowel0': {'path': id_path + 'vowel0.csv', 'categorical_cols': (0, 1, 2), 'class_col': 13}, # ADASYN fails @ fold 3
+
+    'yeast3': {'path': id_path + 'yeast3.csv', 'categorical_cols': (), 'class_col': 8},
+    'yeast4': {'path': id_path + 'yeast4.csv', 'categorical_cols': (), 'class_col': 8},
+    'yeast5': {'path': id_path + 'yeast5.csv', 'categorical_cols': (), 'class_col': 8},
+    'yeast6': {'path': id_path + 'yeast6.csv', 'categorical_cols': (), 'class_col': 8},
+}
+
+datasets_keel = {
+    # 'vowel0': {'path': id_path + 'vowel0.csv', 'categorical_cols': (0, 1, 2), 'class_col': 13}, # ADASYN fails @ fold3
     'cleveland-0_vs_4': {'path': id_path + 'cleveland-0_vs_4.csv', 'categorical_cols': (), 'class_col': 13}, # TVAE
     # 'dermatology-6': {'path': id_path + 'dermatology-6.csv', 'class_col': 34}, GCOP achieves bacc=1
 
@@ -57,7 +82,8 @@ datasets_imb = {
 
     'pima': {'path': id_path + 'pima.csv', 'categorical_cols': (), 'class_col': 8},
     # 'segment0': {'path': id_path + 'segment0.csv', 'categorical_cols': (), 'class_col': 19},  # Bal.acc.=1
-    # 'vowel0': {'path': id_path + 'vowel0.csv', 'categorical_cols': (), 'class_col': 13}, # ADASYN fails @ fold 3
+
+    # 'flare': {'path': id_path + 'flare-F.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 'class_col': 11},
 
     'winequality-red-4': {'path': id_path + 'winequality-red-4.csv', 'categorical_cols': (), 'class_col': 11},
     'winequality-red-8_vs_6': {'path': id_path + 'winequality-red-8_vs_6.csv', 'categorical_cols': (), 'class_col': 11},
@@ -153,9 +179,9 @@ sdd_datasets = {
 # datasets_cat = {'vowel': {'path': id_path + 'vowel0_test.csv', 'categorical_cols': (0, 1, 2), 'class_col': 13} }
 # eval_methods.test_model('CTDGAN', datasets_cat['vowel'], seed)
 
-eval_methods.test_model('CTDGAN', datasets_imb['ecoli3'], seed)
+# eval_methods.test_model('CTDGAN', datasets_imb['ecoli3'], seed)
 
-# eval_methods.eval_resampling(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
+eval_methods.eval_resampling(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
 # eval_methods.eval_detectability(datasets=datasets_imb, transformer='standardizer', num_folds=5, random_state=seed)
 
 # eval_methods.eval_ml_efficacy(datasets, num_threads, seed)

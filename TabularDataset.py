@@ -113,7 +113,7 @@ class TabularDataset(Dataset):
         """
         file_extension = pathlib.Path(path).suffix
         if file_extension == '.csv':
-            self._raw_df = pd.read_csv(path, encoding='utf-8', keep_default_na=True, na_values="<null>")
+            self._raw_df = pd.read_csv(path, skipinitialspace=True, encoding='utf-8', keep_default_na=True, na_values="<null>")
         else:
             self._raw_df = self.get_df(path)
 
@@ -153,7 +153,8 @@ class TabularDataset(Dataset):
                 col = str(self.categorical_columns[c])
                 self.df_[col] = self._label_encoders[c].fit_transform(self.df_[col])
 
-        # Step 6: Label Encode the class labels
+        # Step 6: Label Encode the class labels (after stripping the whitespace)
+        self.df_[str(self.class_column)] = self.df_[str(self.class_column)].map(str.strip)
         self.df_[str(self.class_column)] = self._class_encoder.fit_transform(self.df_[str(self.class_column)])
 
         self.x_ = self.df_.iloc[:, 0:self.class_column].to_numpy()

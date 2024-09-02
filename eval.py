@@ -40,15 +40,17 @@ def test_model(model, dataset, seed):
 
     t_s = time.time()
 
+    epochs = 300
+
     if model == "SBGAN":
         gan = sbGAN(discriminator=(128, 128), generator=(128, 256, 128), method='knn', pac=1, k=5, random_state=seed)
     elif model == "CGAN":
-        gan = cGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, random_state=seed)
+        gan = cGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, random_state=seed, epochs=epochs)
     elif model == "CTGAN":
-        gan = ctGAN(discriminator=(256, 256), generator=(128, 256, 128), pac=1)
+        gan = ctGAN(discriminator=(256, 256), generator=(256, 256), pac=1, epochs=epochs)
     elif model == "CTDGAN":
-        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=1, max_clusters=10, epochs=300, scaler='mms11',
-                     embedding_dim=128, random_state=seed)
+        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=1, max_clusters=10, epochs=epochs,
+                     scaler='mms11', embedding_dim=128, random_state=seed)
     else:
         print("No model specified")
         exit()
@@ -152,7 +154,11 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                     x_balanced = x_train
                     y_balanced = y_train
                 else:
-                    x_balanced, y_balanced = sampler.fit_resample(x_train, y_train, original_dataset, train_idx)
+                    x_balanced, y_balanced = sampler.fit_resample(
+                        x_train=x_train, y_train=y_train,
+                        categorical_columns=ds['categorical_cols'],
+                        original_dataset=original_dataset,
+                        train_idx=train_idx)
 
                 oversampling_duration = time.time() - t_s
 

@@ -4,6 +4,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 import torch
 
@@ -99,20 +100,29 @@ class BaseGAN(BaseGenerator):
             losses: A list of tuples (iteration, epoch, Discriminator loss, Generator loss) recorded during training.
             store_losses: The file path to store the plot.
         """
-        columns = ['Iteration', 'Epoch', 'Discriminator Loss', 'Generator Loss']
+        custom_params = {'axes.facecolor': '#f0f0f0', 'axes.edgecolor': 'black', 'grid.color': '#ffffff',
+                         'legend.labelspacing': 0.5, 'legend.fontsize': 15.0,
+                         'axes.spines.right': False, 'axes.spines.top': False}
+        sns.set_theme(rc=custom_params, font_scale=1.6)
+        colors = ['#0072b0', '#ffa868']
+
+        columns = ['Iteration', 'Epoch', 'Critic Loss it', 'Generator Loss it']
         df = pd.DataFrame(losses, columns=columns)
         df.to_csv(store_losses + 'ctdGAN_losses.csv', sep=';', decimal='.', index=False)
 
         df_mean = pd.DataFrame()
-        df_mean['Mean Discriminator Loss'] = df.groupby('Epoch')['Discriminator Loss'].mean()
-        df_mean['Mean Generator Loss'] = df.groupby('Epoch')['Generator Loss'].mean()
+        df_mean['Critic Loss'] = df.groupby('Epoch')['Critic Loss it'].mean()
+        df_mean['Generator Loss'] = df.groupby('Epoch')['Generator Loss it'].mean()
         df_mean['Epoch'] = df_mean.index + 1
         df_mean.to_csv(store_losses + 'ctdGAN_mean_losses.csv', sep=';', decimal='.', index=False)
 
         # plot = df.plot(x="Iteration", y=["Discriminator Loss", "Generator Loss"], ylim=(0, 1))
-        plot = df_mean.plot(x='Epoch', y=['Mean Discriminator Loss', 'Mean Generator Loss'])
+        plot = df_mean.plot(x='Epoch', y=['Critic Loss', 'Generator Loss'], kind='line', color=colors,
+                            xlabel='Epoch', ylabel='Loss', title="ecoli3")
+
         fig = plot.get_figure()
-        fig.savefig(store_losses + 'GAN_losses.png')
+        # fig.savefig(store_losses + 'GAN_losses.png')
+        fig.savefig(store_losses + 'GAN_losses.pdf', format='pdf', bbox_inches='tight')
 
         plt.show()
 

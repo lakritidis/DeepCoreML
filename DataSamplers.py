@@ -1,3 +1,5 @@
+import inspect
+
 from imblearn.over_sampling import RandomOverSampler
 from imblearn.over_sampling import SMOTE
 from imblearn.over_sampling import BorderlineSMOTE
@@ -52,13 +54,14 @@ class BaseSampler:
         if self.sampler_ is not None:
             self.sampler_.fit(x, y)
 
-    def fit_resample(self, x_train, y_train, original_dataset=None, train_idx=None):
+    def fit_resample(self, x_train, y_train, categorical_columns=(), original_dataset=None, train_idx=None):
         """
         Resample the dataset.
 
         Args:
             x_train: features of the dataset.
             y_train: classes of the dataset.
+            categorical_columns (tuple): A tuple with the indices of the categorical columns
             original_dataset: An object that represents the original input dataset - to be passed to the Synthetic
                 Data Vault models.
             train_idx: The rows of the training examples in the original dataset.
@@ -68,7 +71,11 @@ class BaseSampler:
             # just call it.
             sampler_fit_resample_method = getattr(self.sampler_, "fit_resample", None)
             if callable(sampler_fit_resample_method):
-                return sampler_fit_resample_method(x_train, y_train)
+                fit_resample_arguments = inspect.getfullargspec(sampler_fit_resample_method).args
+                if 'categorical_columns' in fit_resample_arguments:
+                    return sampler_fit_resample_method(x_train, y_train, categorical_columns)
+                else:
+                    return sampler_fit_resample_method(x_train, y_train)
 
             # otherwise, we apply the transformation to the dataset itself:
             else:
@@ -94,7 +101,6 @@ class DataSamplers:
 
         Args:
             random_state: Control the randomization of the algorithm.
-
             sampling_strategy: how the member samplers generate/remove/replace samples.
 
              - If a float is passed, it corresponds to the desired ratio of the number of samples in the minority class over the number of samples in the majority class after resampling. float is only available for binary classification. An error is raised for multi-class classification.
@@ -130,7 +136,7 @@ class DataSamplers:
             dp_cols[k] = {'type': metadata.columns[k]['sdtype']}
 
         # Experimental over-samplers.
-        self.over_samplers_ = (
+        self.over_samplers_test_ = (
             # BaseSampler("TVAE", "TVAE",
             #            TVAESynthesizer(metadata, enforce_min_max_values=True, enforce_rounding=False, epochs=epochs)),
 
@@ -153,6 +159,9 @@ class DataSamplers:
             #                   scaler='mms11', epochs=epochs, pac=pac, max_clusters=max_clusters,
             #                   random_state=random_state)),
 
+            BaseSampler("SMOTE", "SMOTE",
+                        SMOTE(sampling_strategy=sampling_strategy, random_state=random_state)),
+
             BaseSampler("ctdGANBase", "ctdGANBase",
                         ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, batch_size=batch_size,
                                scaler='mms11', epochs=epochs, pac=pac, max_clusters=max_clusters,
@@ -165,7 +174,7 @@ class DataSamplers:
         )
 
         # All over-samplers.
-        self.over_samplers_all_ = (
+        self.over_samplers_ = (
             BaseSampler("None", "None", None),
 
             BaseSampler("Random Oversampling", "ROS",
