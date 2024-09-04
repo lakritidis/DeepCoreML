@@ -279,6 +279,7 @@ class cGAN(GANSynthesizer):
 
         return generated_data, (mean_met, mean_kld)
 
+
     def fit(self, x_train, y_train):
         """`fit` invokes the GAN training process. `fit` renders cGAN compatible with `imblearn`'s interface,
         allowing its usage in over-sampling/under-sampling pipelines.
