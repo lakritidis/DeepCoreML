@@ -17,7 +17,7 @@ from DeepCoreML.TabularTransformer import TabularTransformer
 
 from .gan_discriminators import Critic
 from .gan_generators import ctGenerator
-from .BaseGenerators import BaseGAN
+from .GAN_Synthesizer import GANSynthesizer
 
 import DeepCoreML.paths as paths
 
@@ -162,7 +162,7 @@ class DataSampler(object):
         return vec
 
 
-class ctGAN(BaseGAN):
+class ctGAN(GANSynthesizer):
     """Conditional Table GAN Synthesizer. Forked from [Github](https://github.com/sdv-dev/CTGAN).
     This implementation enriches the interface of ctGAN with a fit_resample method.
 
@@ -193,12 +193,12 @@ class ctGAN(BaseGAN):
         pac (int):
             Number of samples to group together when applying the discriminator. Defaults to 10.
     """
-    def __init__(self, embedding_dim=128, generator=(256, 256), discriminator=(256, 256), pac=10, g_activation=None,
-                 adaptive=False, epochs=300, batch_size=32, lr=2e-4, decay=1e-6, sampling_strategy='auto',
-                 discriminator_steps=1, log_frequency=True, verbose=False, random_state=0):
+    def __init__(self, embedding_dim=128, generator=(256, 256), discriminator=(256, 256), pac=10, epochs=300,
+                 batch_size=32, lr=2e-4, decay=1e-6, sampling_strategy='auto', discriminator_steps=1,
+                 log_frequency=True, verbose=False, random_state=0):
 
-        super().__init__(embedding_dim, discriminator, generator, pac, g_activation, adaptive, epochs, batch_size,
-                         lr, decay, sampling_strategy, random_state)
+        super().__init__("ctGAN", embedding_dim, discriminator, generator, pac, epochs, batch_size,
+                         lr, lr, decay, decay, sampling_strategy, random_state)
 
         assert batch_size % 2 == 0
 
@@ -267,7 +267,8 @@ class ctGAN(BaseGAN):
                     ed_c = st_c + span_info.dim
                     # print("Start:", st, ", End: ", ed, ", Data:", data[:, st:ed])
                     # print("Start_Col:", st_c, ", End_Col: ", ed_c, ", CondVec:", c[:, st_c:ed_c])
-                    tmp = nn.functional.cross_entropy(data[:, st:ed], torch.argmax(c[:, st_c:ed_c], dim=1), reduction='none')
+                    tmp = nn.functional.cross_entropy(data[:, st:ed], torch.argmax(c[:, st_c:ed_c], dim=1),
+                                                      reduction='none')
                     # print("Temp=", tmp)
                     # a = input('').split(" ")[0]
                     # print("Original: ")
@@ -346,9 +347,9 @@ class ctGAN(BaseGAN):
                          pac=self.pac_).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._disc_lr, weight_decay=self._disc_decay, betas=(0.5, 0.9))
         self.G_optimizer_ = torch.optim.Adam(self.G_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._gen_lr, weight_decay=self._gen_decay, betas=(0.5, 0.9))
 
         mean = torch.zeros(self._batch_size, self.embedding_dim_, device=self._device)
         std = mean + 1
@@ -522,7 +523,7 @@ class ctGAN(BaseGAN):
         return self.sample_original(n=num_samples, condition_column=str(self._input_dim),
                                     condition_value=y)[:, 0:self._input_dim]
 
-    def fit_resample(self, x_train, y_train, categorical_columns=None):
+    def fit_resample(self, x_train, y_train):
         """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. The function renders ctGAN
         compatible with the `imblearn`'s interface, allowing its usage in over-sampling/under-sampling pipelines.
 
@@ -533,7 +534,6 @@ class ctGAN(BaseGAN):
         - dict: a dictionary that indicates the number of samples to be generated from each class
 
         Args:
-            categorical_columns: Do not use.
             x_train: The training data instances.
             y_train: The classes of the training data instances.
 
@@ -548,8 +548,8 @@ class ctGAN(BaseGAN):
         self._input_dim = x_train.shape[1]
 
         # Train ctGAN
-        self.train(training_data, discrete_columns=(self._input_dim,), store_losses=paths.output_path_loss)
-        # self.train(training_data, discrete_columns=(self._input_dim,), store_losses=None)
+        # self.train(training_data, discrete_columns=(self._input_dim,), store_losses=paths.output_path_loss)
+        self.train(training_data, discrete_columns=(self._input_dim,), store_losses=None)
 
         # One-hot-encode the class labels; Get the number of classes and the number of samples to generate per class.
         class_encoder = OneHotEncoder()

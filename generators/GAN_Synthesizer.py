@@ -1,6 +1,3 @@
-# BaseGenerator object
-# Generative models and Over-sampling methods inherit from this class.
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -10,30 +7,10 @@ import torch
 
 from sklearn.preprocessing import OneHotEncoder
 
-
-class BaseGenerator:
-    """`BaseGenerator` provides the base class for all generative models.
-
-    Args:
-        epochs: Number of training epochs.
-        batch_size: Number of data instances per training batch.
-        random_state: An integer for seeding the involved random number generators.
-    """
-    def __init__(self, epochs, batch_size, random_state):
-        self._input_dim = 0                     # Input data dimensionality
-        self._n_classes = 0                     # Number of classes in the input dataset
-        self._random_state = random_state       # An integer to seed the random number generators
-
-        self._gen_samples_ratio = None          # Array [number of samples to generate per class]
-        self._samples_per_class = None          # Array [ [x_train_per_class] ]
-
-        self._epochs = epochs                   # Number of training epochs
-        self._batch_size = batch_size           # Number of data instances per training batch
-
-        self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+from .Base_Synthesizer import BaseSynthesizer
 
 
-class BaseGAN(BaseGenerator):
+class GANSynthesizer(BaseSynthesizer):
     """`BaseGAN` provides the base class for all GAN subclasses. It inherits from `BaseGenerator`.
 
     Args:
@@ -43,32 +20,34 @@ class BaseGAN(BaseGenerator):
         generator: a tuple with number of neurons in each fully connected layer of the Generator. It
             determines the dimensionality of the output of each residual block of the Generator.
         pac: Number of samples to group together when applying the discriminator.
-        adaptive: boolean value to enable/disable adaptive training.
-        g_activation: The activation function of the Generator's output layer.
         epochs: Number of training epochs.
         batch_size: Number of data instances per training batch.
-        lr: Learning rate parameter for the Generator/Discriminator Adam optimizers.
-        decay: Weight decay parameter for the Generator/Discriminator Adam optimizers.
+        disc_lr: Learning rate parameter for the Discriminator optimizer.
+        gen_lr: Learning rate parameter for the Generator optimizer.
+        disc_decay: Weight decay parameter for the Discriminator optimizer.
+        gen_decay: Weight decay parameter for the Generator optimizer.
         sampling_strategy:
          - `auto`: perform oversampling on the minority classes to establish class imbalance in the dataset
          - `reproduce`: create a new dataset with the same class distribution as the input dataset
         random_state: An integer for seeding the involved random number generators.
     """
-    def __init__(self, embedding_dim, discriminator, generator, pac, g_activation, adaptive, epochs, batch_size,
-                 lr, decay, sampling_strategy, random_state):
+    def __init__(self, name, embedding_dim, discriminator, generator, pac, epochs, batch_size,
+                 disc_lr, gen_lr, disc_decay, gen_decay, sampling_strategy, random_state):
 
-        super().__init__(epochs, batch_size, random_state)
+        super().__init__(name, random_state)
 
-        self.embedding_dim_ = embedding_dim     # Size of the random sample passed to the Generator.
-        self.gen_activation_ = g_activation     # The activation function of the Generator's output layer
-        self.batch_norm_ = True                 # Sets/unsets 1D-Batch Normalization in the Generator
-        self.adaptive_ = adaptive               # Enables/Disables GAN adaptive training
-        self.test_classifier_ = None            # Optional classification model for evaluating the GAN's effectiveness
-        self.pac_ = pac                         # Number of samples to group together when applying the discriminator.
-        self._lr = lr                           # Learning rate param for the Generator/Discriminator Adam optimizers.
-        self._decay = decay                     # Weight decay param for the Generator/Discriminator Adam optimizers.
+        self.embedding_dim_ = embedding_dim
+        self.batch_norm_ = True
+        self.pac_ = pac
+        self._disc_lr = disc_lr
+        self._gen_lr = gen_lr
+        self._disc_decay = disc_decay
+        self._gen_decay = gen_decay
         self._transformer = None                # Input data transformer (normalizers)
         self._sampling_strategy = sampling_strategy  # Used in `fit_resample`: How GAN generates data
+
+        self._epochs = epochs                   # Number of training epochs
+        self._batch_size = batch_size           # Number of data instances per training batch
 
         # Discriminator parameters (object, architecture, optimizer)
         self.D_ = None

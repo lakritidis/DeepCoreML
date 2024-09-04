@@ -1,5 +1,5 @@
 # SB-GAN: Safe-Borderline Generative Adversarial Net
-# This generative model was introduced in the following paper:
+# Introduced in the following paper:
 #
 # L. Akritidis, A. Fevgas, M. Alamaniotis, P. Bozanis, "Conditional Data Synthesis with Deep Generative Models for
 # Imbalanced Dataset Oversampling", In Proceedings of the 35th IEEE International Conference on Tools with Artificial
@@ -17,10 +17,10 @@ from DeepCoreML.TabularTransformer import TabularTransformer
 
 from .gan_discriminators import PackedDiscriminator
 from .gan_generators import Generator
-from .BaseGenerators import BaseGAN
+from .GAN_Synthesizer import GANSynthesizer
 
 
-class sbGAN(BaseGAN):
+class sbGAN(GANSynthesizer):
     """
     Safe-Borderline GAN
 
@@ -32,9 +32,9 @@ class sbGAN(BaseGAN):
     uses a Packed Discriminator to prevent the model from mode collapsing.
     """
 
-    def __init__(self, embedding_dim=128, discriminator=(128, 128), generator=(256, 256), pac=10, g_activation='tanh',
-                 adaptive=False, epochs=300, batch_size=32, lr=2e-4, decay=1e-6, sampling_strategy='auto',
-                 method='knn', k=5, r=10, random_state=0):
+    def __init__(self, embedding_dim=128, discriminator=(128, 128), generator=(256, 256), epochs=300, batch_size=32,
+                 pac=10, lr=2e-4, decay=1e-6, g_activation='tanh', sampling_strategy='auto', method='knn', k=5, r=10,
+                 random_state=0):
         """
         Initializes a Safe-Borderline Conditional GAN.
 
@@ -45,7 +45,6 @@ class sbGAN(BaseGAN):
             generator: a tuple with number of neurons in each fully connected layer of the Generator. It
                 determines the dimensionality of the output of each residual block of the Generator.
             pac: Number of samples to group together when applying the discriminator.
-            adaptive: boolean value to enable/disable adaptive training.
             g_activation: The activation function of the Generator's output layer.
             epochs: Number of training epochs.
             batch_size: Number of data instances per training batch.
@@ -57,9 +56,10 @@ class sbGAN(BaseGAN):
             sampling_strategy: How the model generates data.
             random_state (int): Seed the random number generators. Use the same value for reproducible results.
         """
-        super().__init__(embedding_dim, discriminator, generator, pac, g_activation, adaptive, epochs, batch_size,
-                         lr, decay, sampling_strategy, random_state)
+        super().__init__("SB-GAN", embedding_dim, discriminator, generator, pac, epochs, batch_size,
+                         lr, lr, decay, decay, sampling_strategy, random_state)
 
+        self.gen_activation_ = g_activation
         self._method = method
         self._n_neighbors = k
         self._radius = r
@@ -240,7 +240,7 @@ class sbGAN(BaseGAN):
         self._transformer.fit(x_train)
         x_train = self._transformer.transform(x_train)
 
-        # select_prepare: implemented in BaseGenerators.py
+        # select_prepare: implemented in GAN_Synthesizer.py
         training_data = self.select_prepare(x_train, y_train)
 
         train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
@@ -251,9 +251,9 @@ class sbGAN(BaseGAN):
                             activation=self.gen_activation_, normalize=self.batch_norm_).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._disc_lr, weight_decay=self._disc_decay, betas=(0.5, 0.9))
         self.G_optimizer_ = torch.optim.Adam(self.G_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._gen_lr, weight_decay=self._gen_decay, betas=(0.5, 0.9))
 
         disc_loss, gen_loss = 0, 0
         for epoch in range(self._epochs):

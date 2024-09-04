@@ -1,5 +1,5 @@
 # cGAN: Conditional Generative Adversarial Net
-# This model was introduced in the following paper:
+# Introduced in the following paper:
 #
 # M. Mirza, S. Osindero, "Conditional Generative Adversarial Nets", arXiv preprint arXiv:1411.1784, 2014.
 
@@ -14,24 +14,19 @@ from sklearn.metrics import accuracy_score
 from DeepCoreML.TabularTransformer import TabularTransformer
 from .gan_discriminators import PackedDiscriminator
 from .gan_generators import Generator
-from .BaseGenerators import BaseGAN
+from .GAN_Synthesizer import GANSynthesizer
 
 
-class cGAN(BaseGAN):
-    """Conditional GAN (cGAN)
+class cGAN(GANSynthesizer):
+    """Conditional GAN (CGAN)
 
-    Conditional GANs conditionally generate data from a specific class. They are trained by providing both the Generator
-    and the Discriminator the input feature vectors concatenated with their respective one-hot-encoded class labels.
-
-    A Packed Conditional GAN (Pac cGAN) is a cGAN that accepts input samples in packs. Pac cGAN uses a Packed
-    Discriminator to prevent the model from mode collapsing.
+    Conditional GANs conditionally generate data from a specific class.
     """
 
     def __init__(self, embedding_dim=128, discriminator=(128, 128), generator=(256, 256), epochs=300, batch_size=32,
-                 pac=10, lr=2e-4, decay=1e-6, g_activation='tanh', adaptive=False, sampling_strategy='auto',
-                 random_state=0):
+                 pac=10, lr=2e-4, decay=1e-6, g_activation='tanh', sampling_strategy='auto', random_state=0):
 
-        """Initializes a Packed Conditional GAN.
+        """CGAN Initializer
 
         Args:
             embedding_dim (int): Size of the random sample passed to the Generator.
@@ -45,15 +40,17 @@ class cGAN(BaseGAN):
             lr (real): The value of the learning rate parameter for the Generator/Critic Adam optimizers.
             decay (real): The value of the weight decay parameter for the Generator/Critic Adam optimizers.
             g_activation (string): The activation function for the Generator's output layer.
-            adaptive (bool): A flag that triggers adaptive training (experimental).
             sampling_strategy (string or dictionary): How the algorithm generates samples:
 
               * 'auto': the model balances the dataset by oversampling the minority classes.
               * dict: a dictionary that indicates the number of samples to be generated from each class.
             random_state (int): Seed the random number generators. Use the same value for reproducible results.
         """
-        super().__init__(embedding_dim, discriminator, generator, pac, g_activation, adaptive, epochs, batch_size,
-                         lr, decay, sampling_strategy, random_state)
+        super().__init__("CGAN", embedding_dim, discriminator, generator, pac, epochs, batch_size,
+                         lr, lr, decay, decay, sampling_strategy, random_state)
+
+        self.gen_activation_ = g_activation
+        self.test_classifier_ = None
 
     def train_batch(self, real_data):
         """
@@ -160,7 +157,6 @@ class cGAN(BaseGAN):
         self._transformer.fit(x_train)
         x_train = self._transformer.transform(x_train)
 
-        # prepare: implemented in BaseGenerators.py
         training_data = self.prepare(x_train, y_train)
         train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 
@@ -170,9 +166,9 @@ class cGAN(BaseGAN):
                             activation=self.gen_activation_, normalize=self.batch_norm_).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._disc_lr, weight_decay=self._disc_decay, betas=(0.5, 0.9))
         self.G_optimizer_ = torch.optim.Adam(self.G_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._gen_lr, weight_decay=self._gen_decay, betas=(0.5, 0.9))
 
         disc_loss, gen_loss = 0, 0
         for epoch in range(self._epochs):
@@ -209,7 +205,6 @@ class cGAN(BaseGAN):
         self._transformer.fit(x_train)
         x_train = self._transformer.transform(x_train)
 
-        # prepare: implemented in BaseGenerators.py
         training_data = self.prepare(x_train, y_train)
         train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 
@@ -219,9 +214,9 @@ class cGAN(BaseGAN):
                             activation=self.gen_activation_, normalize=self.batch_norm_).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._disc_lr, weight_decay=self._disc_decay, betas=(0.5, 0.9))
         self.G_optimizer_ = torch.optim.Adam(self.G_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._gen_lr, weight_decay=self._gen_decay, betas=(0.5, 0.9))
 
         if gen_samples_ratio is None:
             gen_samples_ratio = self._gen_samples_ratio

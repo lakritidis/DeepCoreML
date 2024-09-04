@@ -18,7 +18,7 @@ from sklearn.ensemble import IsolationForest
 
 from .gan_discriminators import PackedDiscriminator
 from .gan_generators import Generator
-from .BaseGenerators import BaseGAN
+from .GAN_Synthesizer import GANSynthesizer
 
 
 class GMMComponent:
@@ -199,7 +199,7 @@ class ClassSubSpace:
         pass
 
 
-class GMM_GAN(BaseGAN):
+class GMM_GAN(GANSynthesizer):
     """
     GMM GAN
 

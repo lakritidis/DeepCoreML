@@ -82,7 +82,7 @@ class Residual(nn.Module):
 
 
 class ctGenerator(nn.Module):
-    """Generator for the CTGAN."""
+    """Generator for ctGAN and ctdGAN"""
 
     def __init__(self, embedding_dim, architecture, data_dim):
         super().__init__()

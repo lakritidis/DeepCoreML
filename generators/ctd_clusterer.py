@@ -332,18 +332,17 @@ class ctdClusterer:
 
     def _run_test_kmeans(self, scaled_data, k, alpha_k=0.02):
         """
-        Parameters
-        ----------
+        Args:
         scaled_data: matrix
             scaled data. rows are samples and columns are features for clustering
         k: int
             current k for applying KMeans
         alpha_k: float
             manually tuned factor that gives penalty to the number of clusters
-        Returns
-        -------
-        scaled_inertia: float
-            scaled inertia value for current k
+
+        Returns:
+            scaled_inertia: float
+                scaled inertia value for current k
         """
 
         inertia_o = np.square((scaled_data - scaled_data.mean(axis=0))).sum()

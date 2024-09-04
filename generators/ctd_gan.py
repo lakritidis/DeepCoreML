@@ -9,13 +9,13 @@ from torch.utils.data import DataLoader
 from DeepCoreML.TabularTransformer import TabularTransformer
 from .gan_discriminators import Critic
 from .gan_generators import ctGenerator
-from .BaseGenerators import BaseGAN
+from .GAN_Synthesizer import GANSynthesizer
 from .ctd_clusterer import ctdClusterer
 
 import DeepCoreML.paths as paths
 
 
-class ctdGAN(BaseGAN):
+class ctdGAN(GANSynthesizer):
     """
     ctdGAN implementation
 
@@ -53,8 +53,8 @@ class ctdGAN(BaseGAN):
             max_clusters (int): The maximum number of clusters to create.
             random_state (int): Seed the random number generators. Use the same value for reproducible results.
         """
-        super().__init__(embedding_dim, discriminator, generator, pac, None, False, epochs,
-                         batch_size, lr, decay, sampling_strategy, random_state)
+        super().__init__("ctdGAN", embedding_dim, discriminator, generator, pac, epochs, batch_size,
+                         lr, lr, decay, decay, sampling_strategy, random_state)
 
         if scaler != 'mms11' and scaler != 'mms01' and scaler != 'stds':
             self._scaler = 'mms11'
@@ -398,9 +398,9 @@ class ctdGAN(BaseGAN):
                               data_dim=real_space_dimensions).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._disc_lr, weight_decay=self._disc_decay, betas=(0.5, 0.9))
         self.G_optimizer_ = torch.optim.Adam(self.G_.parameters(),
-                                             lr=self._lr, weight_decay=self._decay, betas=(0.5, 0.9))
+                                             lr=self._gen_lr, weight_decay=self._gen_decay, betas=(0.5, 0.9))
 
         losses = []
         it = 0
@@ -425,12 +425,11 @@ class ctdGAN(BaseGAN):
         """
         self.train(x_train, y_train)
 
-    def sample(self, num_samples, y=None, conditions=None):
+    def sample(self, num_samples, y=None):
         """ Create artificial samples using the GAN's Generator.
 
         Args:
             num_samples (int): The number of samples to generate.
-            conditions (dict): A dictionary with conditions on the dataset discrete columns.
             y (int): A condition on the class of the generated samples.
 
         Returns:
@@ -439,104 +438,111 @@ class ctdGAN(BaseGAN):
         num_columns = len(self._discrete_transformer.output_info_list)
         column_transform_info_list = self._discrete_transformer.get_column_transform_info_list()
 
-        # If no specific class is required, select random class labels
-        if y is None:
-            latent_classes = np.random.randint(low=0, high=self._n_classes, size=num_samples)
-        # Otherwise, fill the classes tensor with the requested class (y) value
-        else:
-            latent_classes = np.full(shape=num_samples, fill_value=y)
-
-        # We will determine the appropriate clusters later, according to the classes of the samples
-        latent_clusters = np.zeros(shape=num_samples)
-
-        # Select random integer values for the discrete variables. These values will be later one-hot-encoded.
-        latent_disc = []
-        latent_cont = []
-        col = 0
-        column_labels = []
-        for column_metadata in self._discrete_transformer.output_info_list:
-            col = col + 1
-            for span_info in column_metadata:
-                if span_info.activation_fn == 'softmax':
-                    column_labels.append(str(col - 1))
-                    col_length = span_info.dim
-
-                    # Discrete variables excluding the class
-                    if col < num_columns - 1:
-                        random_discrete_vals = np.random.randint(low=0, high=col_length, size=num_samples)
-                        latent_disc.append(random_discrete_vals)
-
-        # For each sample with a specific class, pick a cluster with probability lat_subspace.get_cluster_probs().
-        # In the same time, sample the probability distribution of each cluster to get the latent representation of
-        # the continuous variables.
-        latent_clusters_objs = []
-        for s in range(num_samples):
-            lat_class = int(latent_classes[s])
-            p_matrix = self._clustered_transformer.probability_matrix_[lat_class]
-
-            # Select the cluster with probability self._cc_prob_vector
-            latent_clusters[s] = np.random.choice(
-                a=np.arange(self._n_clusters, dtype=int), size=None, replace=True, p=p_matrix)
-
-            latent_cluster_object = self._clustered_transformer.get_cluster(int(latent_clusters[s]))
-            latent_clusters_objs.append(latent_cluster_object)
-
-            latent_cont.append(latent_cluster_object.sample())
-
-        # Put all discrete variables together into the same matrix (including the class and cluster labels)
-        latent_disc.append(latent_clusters)
-        latent_disc.append(latent_classes)
-        latent_disc = pd.DataFrame(np.stack(latent_disc, axis=1), columns=column_labels)
-
-        # Now one-hot-encode the discrete variables by using the OneHotEncoders that were used during training
-        latent_disc_ohe = []
-        for column_transform_info in column_transform_info_list:
-            if column_transform_info.column_type != 'continuous':
-                column_name = column_transform_info.column_name
-                data = latent_disc[[column_name]]
-                one_hot_data = self._discrete_transformer.transform_discrete(column_transform_info, data)
-                latent_disc_ohe.append(one_hot_data)
-
-        # Create the discrete and continuous tensors.
-        latent_disc_ohe = torch.tensor(np.hstack(latent_disc_ohe))
-        latent_cont = torch.tensor(np.vstack(latent_cont))
-
-        # Concatenate the continuous with the discrete variables
-        latent_data = torch.cat((latent_cont, latent_disc_ohe), dim=1).to(self._device)
-
-        # Generate samples by passing the latent data to Generator
-        generated_data = self._apply_activate(self.G_(latent_data)).cpu().detach().numpy()
-        generated_samples = self._discrete_transformer.inverse_transform(generated_data)
-
-        # print(latent_classes)
-        # print("Latent:", latent_data)
-        # print(generated_samples)
-
-        # Inverse the transformation of the generated samples. First inverse the transformation of the continuous
-        # variables that have been encoded according to the cluster the sample belongs.
+        num_generated_samples, num_retries, max_retries = 0, 0, 10
         reconstructed_samples = []
-        correct_classes, correct_clusters = 0, 0
-        for s in range(num_samples):
-            z = generated_samples[s].reshape(1, -1)
 
-            generated_class = z[0, z.shape[1]-1]
-            generated_cluster = z[0, z.shape[1]-2]
+        # Keep generating samples, until we reach the requested number of num_samples
+        while num_generated_samples < num_samples:
+            num_retries += 1
 
-            if generated_class == y:
-                correct_classes += 1
-            if generated_cluster == latent_clusters[s]:
-                correct_clusters += 1
+            # If no specific class is requested, select random class labels.
+            if y is None:
+                latent_classes = np.random.randint(low=0, high=self._n_classes, size=num_samples)
+            # Otherwise, fill the classes tensor with the requested class (y) value
+            else:
+                latent_classes = np.full(shape=num_samples, fill_value=y)
 
-            reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
-            # print("Sample", s, "- Gen:", z, " ===>", reconstructed_sample)
+            # We will determine the appropriate clusters later, according to the classes of the samples
+            latent_clusters = np.zeros(shape=num_samples)
 
-            reconstructed_samples.append(reconstructed_sample)
+            # Select random values for the discrete variables. These values will be later one-hot-encoded.
+            latent_disc = []
+            latent_cont = []
+            col = 0
+            column_labels = []
+            for column_metadata in self._discrete_transformer.output_info_list:
+                col = col + 1
+                for span_info in column_metadata:
+                    if span_info.activation_fn == 'softmax':
+                        column_labels.append(str(col - 1))
+                        col_length = span_info.dim
 
-        reconstructed_samples = np.vstack(reconstructed_samples)
+                        # Discrete variables excluding the class
+                        if col < num_columns - 1:
+                            random_discrete_vals = np.random.randint(low=0, high=col_length, size=num_samples)
+                            latent_disc.append(random_discrete_vals)
 
-        # print("Correct Clusters: ", correct_clusters, " == ", "Correct Classes:", correct_classes)
+            # For each sample with a specific class, pick a random cluster with probability determined by the
+            # corresponding p_matrix. In the same time, sample the probability distribution of each cluster to
+            # get the latent representation of the continuous variables.
+            latent_clusters_objs = []
+            for s in range(num_samples):
+                lat_class = int(latent_classes[s])
+                p_matrix = self._clustered_transformer.probability_matrix_[lat_class]
 
-        return reconstructed_samples
+                # Select the cluster with probability self._cc_prob_vector
+                latent_clusters[s] = np.random.choice(
+                    a=np.arange(self._n_clusters, dtype=int), size=None, replace=True, p=p_matrix)
+
+                latent_cluster_object = self._clustered_transformer.get_cluster(int(latent_clusters[s]))
+                latent_clusters_objs.append(latent_cluster_object)
+
+                latent_cont.append(latent_cluster_object.sample())
+
+            # Put all discrete variables together into the same matrix (including the class and cluster labels)
+            latent_disc.append(latent_clusters)
+            latent_disc.append(latent_classes)
+            latent_disc = pd.DataFrame(np.stack(latent_disc, axis=1), columns=column_labels)
+
+            # Now one-hot-encode the discrete variables by using the OneHotEncoders that were used during training
+            latent_disc_ohe = []
+            for column_transform_info in column_transform_info_list:
+                if column_transform_info.column_type != 'continuous':
+                    column_name = column_transform_info.column_name
+                    data = latent_disc[[column_name]]
+                    one_hot_data = self._discrete_transformer.transform_discrete(column_transform_info, data)
+                    latent_disc_ohe.append(one_hot_data)
+
+            # Create the discrete and continuous tensors.
+            latent_disc_ohe = torch.tensor(np.hstack(latent_disc_ohe))
+            latent_cont = torch.tensor(np.vstack(latent_cont))
+
+            # Concatenate the continuous with the discrete variables
+            latent_data = torch.cat((latent_cont, latent_disc_ohe), dim=1).to(self._device)
+
+            # Generate samples by passing the latent data to Generator
+            generated_data = self._apply_activate(self.G_(latent_data)).cpu().detach().numpy()
+            generated_samples = self._discrete_transformer.inverse_transform(generated_data)
+            # print(latent_classes)
+            # print("Latent:", latent_data)
+            # print(generated_samples)
+
+            # Reverse the transformation of the generated samples. First inverse the transformation of the
+            # continuous variables that have been encoded according to the cluster the sample belongs.
+            for s in range(num_samples):
+                z = generated_samples[s].reshape(1, -1)
+                generated_class = z[0, z.shape[1]-1]
+
+                if generated_class == latent_classes[s]:
+                    num_generated_samples += 1
+                    if num_generated_samples > num_samples:
+                        return_samples = np.vstack(reconstructed_samples)
+                        print("Created ", return_samples.shape, "samples")
+                        return return_samples
+                    reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
+                    reconstructed_samples.append(reconstructed_sample)
+
+                # num_generated_samples += 1
+                # reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
+                # reconstructed_samples.append(reconstructed_sample)
+
+                # print("Sample", s, "- Gen:", z, " ===>", reconstructed_sample)
+            if num_retries > max_retries:
+                break
+
+        return_samples = np.vstack(reconstructed_samples)
+        print("Incompletely Created ", return_samples.shape, "samples")
+        return return_samples
 
     def fit_resample(self, x_train, y_train, categorical_columns=()):
         """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. The function renders sbGAN
@@ -580,7 +586,7 @@ class ctdGAN(BaseGAN):
                         # Generate the appropriate number of samples to equalize cls with the majority class.
                         # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
                         generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
-                        generated_classes = np.full(samples_to_generate, cls)
+                        generated_classes = np.full(generated_samples.shape[0], cls)
 
                         x_resampled = np.vstack((x_resampled, generated_samples))
                         y_resampled = np.hstack((y_resampled, generated_classes))

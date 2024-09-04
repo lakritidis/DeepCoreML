@@ -11,8 +11,6 @@ from sklearn.metrics.pairwise import euclidean_distances
 
 from imblearn.over_sampling import SMOTE
 
-from .BaseGenerators import BaseGenerator
-
 
 class CentroidSampler:
     """
@@ -120,7 +118,7 @@ class CentroidSampler:
         return x_out, y_out
 
 
-class CBR(BaseGenerator):
+class CBR:
     """
     Cluster-Based Over-sampler.
 
@@ -150,13 +148,13 @@ class CBR(BaseGenerator):
                 increase the minimum allowed distance for cluster merging (fewer, yet larger clusters will be created).
             random_state:
         """
-        super().__init__(0, 0, random_state)
 
         self._cluster_estimator = cluster_estimator
         self._cluster_resampler = cluster_resampler
         self._sampling_strategy = sampling_strategy
         self.gcd = None  # Global Class Distribution
         self._majority_class = None
+        self._random_state = random_state
 
         self._n_samples = 0
         self._n_clusters = 0
