@@ -169,6 +169,14 @@ class TabularDataset(Dataset):
         for k in range(self.num_classes):
             print("\tClass", k, ":", len(self.y_[self.y_ == k]), "samples")
 
+    # Get dummies - onehot encode the categorical columns
+    def get_dummies(self):
+        if self.categorical_columns is not None:
+            str_cat_columns = [str(c) for c in self.categorical_columns]
+            transformed_df = pd.get_dummies(data=self.df_, columns=str_cat_columns, dtype=int)
+
+            return transformed_df
+
     # Display the basic dataset parameters
     def display_params(self):
         """

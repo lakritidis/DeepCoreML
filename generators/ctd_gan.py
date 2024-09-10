@@ -25,7 +25,8 @@ class ctdGAN(GANSynthesizer):
     """
 
     def __init__(self, discriminator=(128, 128), generator=(256, 256), embedding_dim=128, epochs=300, batch_size=32,
-                 scaler='mms11', pac=1, lr=2e-4, decay=1e-6, sampling_strategy='auto', max_clusters=20, random_state=0):
+                 scaler='mms11', pac=1, lr=2e-4, decay=1e-6, sampling_strategy='auto',
+                 cluster_method='kmeans', max_clusters=20, random_state=0):
         """
         ctdGAN initializer
 
@@ -56,6 +57,7 @@ class ctdGAN(GANSynthesizer):
         super().__init__("ctdGAN", embedding_dim, discriminator, generator, pac, epochs, batch_size,
                          lr, lr, decay, decay, sampling_strategy, random_state)
 
+        self._cluster_method = cluster_method
         if scaler != 'mms11' and scaler != 'mms01' and scaler != 'stds':
             self._scaler = 'mms11'
         else:
@@ -133,11 +135,12 @@ class ctdGAN(GANSynthesizer):
         self._input_dim = x_train.shape[1]
         continuous_columns = [c for c in range(self._input_dim) if c not in self._categorical_columns]
 
-        # ====== Initialize and deploy the Clustered Transformer object that: i) partitions the real space, and
+        # ====== Initialize and fit the Clustered Transformer object that: i) partitions the real space, and
         # ====== ii) performs data transformations (scaling, PCA, outlier detection, etc.)
         self._samples_per_class = np.unique(y_train, return_counts=True)[1]
 
-        self._clustered_transformer = ctdClusterer(max_clusters=self._max_clusters, scaler=self._scaler,
+        self._clustered_transformer = ctdClusterer(cluster_method=self._cluster_method, max_clusters=self._max_clusters,
+                                                   scaler=self._scaler,
                                                    samples_per_class=self._samples_per_class,
                                                    continuous_columns=tuple(continuous_columns),
                                                    discrete_columns=tuple(self._categorical_columns),
@@ -195,14 +198,16 @@ class ctdGAN(GANSynthesizer):
         latent_disc = torch.hstack(latent_disc).to(self._device)
 
         # === Continuous variables - Sample from the corresponding Normal distribution of each cluster.
-        latent_cont = []
-        for s in range(num_samples):
-            latent_cluster_object = self._clustered_transformer.get_cluster(latent_clusters[s])
-            z_cont = latent_cluster_object.sample()
-            latent_cont.append(z_cont)
+        mean = torch.zeros(num_samples, self.embedding_dim_)
+        std = mean + 1
+        latent_cont = torch.normal(mean=mean, std=std).to(self._device)
 
-        # Convert the list of the latent vectors (tensors) to a pytorch tensor:
-        latent_cont = torch.stack(latent_cont).to(self._device)
+        # latent_cont = []
+        # for s in range(num_samples):
+        #    latent_cluster_object = self._clustered_transformer.get_cluster(latent_clusters[s])
+        #    z_cont = latent_cluster_object.sample()
+        #    latent_cont.append(z_cont)
+        # latent_cont = torch.stack(latent_cont).to(self._device)
 
         return latent_cont, latent_disc
 
@@ -270,7 +275,8 @@ class ctdGAN(GANSynthesizer):
                     # Penalize mis-classifications more heavily
                     elif st_idx == class_st_idx and ed_idx == class_ed_idx:
                         # self._categorical_columns = 1 + number of discrete columns (2 is from the class + cluster col)
-                        gamma = len(self._categorical_columns) - 1
+                        # gamma = len(self._categorical_columns) - 1
+                        gamma = 1.0
 
                         if self._n_classes == 2:
                             tmp = gamma * nn.functional.binary_cross_entropy(gen_d, lat_d, reduction='none')[:, 0]
@@ -386,6 +392,7 @@ class ctdGAN(GANSynthesizer):
 
         # Prepare the data for training (Clustering, Computation of Probability Distributions, Transformations, etc.)
         training_data = self.cluster_transform(x_train, y_train, categorical_columns=categorical_columns)
+
         train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 
         real_space_dimensions = self._discrete_transformer.output_dimensions
@@ -457,7 +464,7 @@ class ctdGAN(GANSynthesizer):
 
             # Select random values for the discrete variables. These values will be later one-hot-encoded.
             latent_disc = []
-            latent_cont = []
+            # latent_cont = []
             col = 0
             column_labels = []
             for column_metadata in self._discrete_transformer.output_info_list:
@@ -467,7 +474,7 @@ class ctdGAN(GANSynthesizer):
                         column_labels.append(str(col - 1))
                         col_length = span_info.dim
 
-                        # Discrete variables excluding the class
+                        # Discrete variables excluding the class and the cluster
                         if col < num_columns - 1:
                             random_discrete_vals = np.random.randint(low=0, high=col_length, size=num_samples)
                             latent_disc.append(random_discrete_vals)
@@ -476,6 +483,7 @@ class ctdGAN(GANSynthesizer):
             # corresponding p_matrix. In the same time, sample the probability distribution of each cluster to
             # get the latent representation of the continuous variables.
             latent_clusters_objs = []
+
             for s in range(num_samples):
                 lat_class = int(latent_classes[s])
                 p_matrix = self._clustered_transformer.probability_matrix_[lat_class]
@@ -487,7 +495,7 @@ class ctdGAN(GANSynthesizer):
                 latent_cluster_object = self._clustered_transformer.get_cluster(int(latent_clusters[s]))
                 latent_clusters_objs.append(latent_cluster_object)
 
-                latent_cont.append(latent_cluster_object.sample())
+                # latent_cont.append(latent_cluster_object.sample())
 
             # Put all discrete variables together into the same matrix (including the class and cluster labels)
             latent_disc.append(latent_clusters)
@@ -505,7 +513,11 @@ class ctdGAN(GANSynthesizer):
 
             # Create the discrete and continuous tensors.
             latent_disc_ohe = torch.tensor(np.hstack(latent_disc_ohe))
-            latent_cont = torch.tensor(np.vstack(latent_cont))
+            # latent_cont = torch.tensor(np.vstack(latent_cont))
+
+            mean = torch.zeros(num_samples, self.embedding_dim_)
+            std = mean + 1
+            latent_cont = torch.normal(mean=mean, std=std)
 
             # Concatenate the continuous with the discrete variables
             latent_data = torch.cat((latent_cont, latent_disc_ohe), dim=1).to(self._device)
@@ -527,7 +539,7 @@ class ctdGAN(GANSynthesizer):
                     num_generated_samples += 1
                     if num_generated_samples > num_samples:
                         return_samples = np.vstack(reconstructed_samples)
-                        print("Created ", return_samples.shape, "samples")
+                        print("\t\t\tCreated ", return_samples.shape, "samples")
                         return return_samples
                     reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
                     reconstructed_samples.append(reconstructed_sample)
@@ -541,7 +553,7 @@ class ctdGAN(GANSynthesizer):
                 break
 
         return_samples = np.vstack(reconstructed_samples)
-        print("Incompletely Created ", return_samples.shape, "samples")
+        print("\t\t\tIncompletely Created ", return_samples.shape, "samples")
         return return_samples
 
     def fit_resample(self, x_train, y_train, categorical_columns=()):

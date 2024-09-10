@@ -48,7 +48,7 @@ class ResultHandler:
 
         return latex_code
 
-    def record_results(self, filename):
+    def record_results(self):
         pd.set_option('display.precision', 3)
 
         # Results in latex format
@@ -65,9 +65,4 @@ class ResultHandler:
 
         # Results in CSV format
         results = self.to_df().sort_values(by=['Dataset', 'Sampler', 'Scorer', 'Fold'])
-        results.to_csv(self._out_path + filename + '_folds.csv')
-
-    def record_results_full(self, filename):
-        df = self.to_df()
-        df.to_csv(self._out_path + filename + '.csv')
-        print(df)
+        results.to_csv(self._out_path + self.description_ + '.csv')

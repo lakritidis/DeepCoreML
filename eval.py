@@ -10,7 +10,7 @@ from generators.ctd_gan import ctdGAN
 
 from TabularDataset import TabularDataset
 from Resamplers import TestSynthesizers
-from DataTools import set_random_states, get_random_states, reset_random_states
+from Tools import set_random_states, get_random_states, reset_random_states
 from ResultHandler import ResultHandler
 from Classifiers import Classifiers
 
@@ -41,7 +41,7 @@ def test_model(model, dataset, seed):
 
     t_s = time.time()
 
-    epochs = 300
+    epochs = 5
 
     if model == "SBGAN":
         gan = sbGAN(discriminator=(128, 128), generator=(128, 256, 128), method='knn', pac=1, k=5, random_state=seed)
@@ -50,8 +50,8 @@ def test_model(model, dataset, seed):
     elif model == "CTGAN":
         gan = ctGAN(discriminator=(256, 256), generator=(256, 256), pac=1, epochs=epochs)
     elif model == "CTDGAN":
-        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=1, max_clusters=10, epochs=epochs,
-                     scaler='mms11', embedding_dim=128, random_state=seed)
+        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=1, max_clusters=20, epochs=epochs,
+                     batch_size=128, scaler='mms11', cluster_method='kmeans', embedding_dim=128, random_state=seed)
     else:
         print("No model specified")
         exit()
@@ -130,6 +130,7 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
         n_fold = 0
 
         # For each fold
+        dataset_performance_list = []
         for train_idx, test_idx in skf.split(dataset.x_, dataset.y_):
             n_fold += 1
             print("\tFold: ", n_fold)
@@ -156,7 +157,7 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                 else:
                     x_balanced, y_balanced = synthesizer.fit_resample(dataset=dataset, training_set_rows=train_idx)
 
-                print(x_balanced.shape, y_balanced.shape)
+                # print(x_balanced.shape, y_balanced.shape)
 
                 oversampling_duration = time.time() - t_s
 
@@ -193,12 +194,18 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
 
                         lst = [key, n_fold, synthesizer.name_, classifier.name_, scorer, performance]
                         performance_list.append(lst)
+                        dataset_performance_list.append(lst)
 
                     lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                     performance_list.append(lst)
+                    dataset_performance_list.append(lst)
 
-    drh = ResultHandler("Resampling", performance_list)
-    drh.record_results("resampling_mean")
+            d_drh = ResultHandler("perDataset/Resampling_" + key + "_seed_" + str(random_state),
+                                  dataset_performance_list)
+            d_drh.record_results()
+
+    drh = ResultHandler(".`Resampling_seed_" + str(random_state), performance_list)
+    drh.record_results()
 
     print("\n=================================\n")
 
@@ -241,6 +248,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
 
     n_dataset, n_fold = 0, 0
     performance_list = []
+    dataset_performance_list = []
 
     # For each dataset
     for key in datasets.keys():
@@ -335,12 +343,18 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
 
                             lst = [key, n_fold, synthesizer.name_, classifier.name_, scorer, performance]
                             performance_list.append(lst)
+                            dataset_performance_list.append(lst)
 
                         lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                         performance_list.append(lst)
+                        dataset_performance_list.append(lst)
 
-    drh = ResultHandler("Detectability", performance_list)
-    drh.record_results("detectability_mean")
+            d_drh = ResultHandler("perDataset/Detectability_" + key + "_seed_" + str(random_state),
+                                  dataset_performance_list)
+            d_drh.record_results()
+
+    drh = ResultHandler("Detectability_ALL_seed_" + str(random_state), performance_list)
+    drh.record_results()
 
     print("\n=================================\n")
 
@@ -420,9 +434,9 @@ def eval_oversampling_efficacy(datasets, num_threads, random_state):
                     dataset_results_list.append(r[e])
 
         # Record the results for this dataset
-        drh = ResultHandler("Oversampling", dataset_results_list)
-        drh.record_results(key + "_oversampling")
+        drh = ResultHandler(key + "_oversampling", dataset_results_list)
+        drh.record_results()
 
     # Record the results for all datasets
-    rh = ResultHandler("Oversampling", results_list)
-    rh.record_results("oversampling")
+    rh = ResultHandler("oversampling", results_list)
+    rh.record_results()

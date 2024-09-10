@@ -1,11 +1,10 @@
 import numpy as np
 
 import torch
-from torch.distributions import Normal
 
 from sklearn.ensemble import IsolationForest
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 
 from joblib import Parallel, delayed
@@ -13,14 +12,13 @@ from joblib import Parallel, delayed
 
 class ctdCluster:
     """A typical cluster for ctdGAN."""
-    def __init__(self, label=None, center=None, scaler=None, embedding_dim=32,
-                 continuous_columns=(), discrete_columns=(), clip=False, random_state=0):
+    def __init__(self, label=None, scaler=None, embedding_dim=32, clip=False,
+                 continuous_columns=(), discrete_columns=(), random_state=0):
         """
         ctdCluster initializer. A typical cluster for ctdGAN.
 
         Args:
             label: The cluster's label
-            center (tuple): The cluster's centroid
             scaler (string): A descriptor that defines a transformation on the cluster's data. Values:
 
               * '`None`'  : No transformation takes place; the data is considered immutable
@@ -41,35 +39,20 @@ class ctdCluster:
         self._random_state = random_state
 
         self._num_samples = 0
-        self._data_dimensions = 0
 
-        self.center_ = center
         self._min = None
         self._max = None
 
         self.class_distribution_ = None
-        self.probability_distribution_ = None
 
         # Define the Data Transformation Model for the continuous columns
         if len(continuous_columns) > 0:
             if scaler == 'stds':
                 self._scaler = StandardScaler()
-                # self._scaler = ColumnTransformer(
-                #    remainder='passthrough',
-                #    transformers=[(scaler, StandardScaler(), continuous_columns)])
-
             elif scaler == 'mms01':
                 self._scaler = MinMaxScaler(feature_range=(0, 1))
-                # self._scaler = ColumnTransformer(
-                #    remainder='passthrough',
-                #    transformers=[(scaler, MinMaxScaler(feature_range=(0, 1)), continuous_columns)])
-
             elif scaler == 'mms11':
                 self._scaler = MinMaxScaler(feature_range=(-1, 1))
-                # self._scaler = ColumnTransformer(
-                #   remainder='passthrough', force_int_remainder_cols=True,
-                #    transformers=[(scaler, MinMaxScaler(feature_range=(-1, 1)), continuous_columns)])
-
             else:
                 self._scaler = None
         else:
@@ -85,13 +68,6 @@ class ctdCluster:
             num_classes: The distinct number of classes in `y`.
         """
         self._num_samples = x.shape[0]
-        self._data_dimensions = x.shape[1]
-
-        mean = torch.zeros(self._embedding_dim)
-        std = torch.ones(self._embedding_dim)
-
-        # The probability distribution that models the cluster samples
-        self.probability_distribution_ = Normal(loc=mean, scale=std)
 
         # Min/Max column values are used for clipping.
         self._min = [np.min(x[:, i]) for i in self._continuous_columns]
@@ -158,7 +134,8 @@ class ctdCluster:
             for d_col in self._discrete_columns:
                 reconstructed_data = np.insert(reconstructed_data, d_col, x[:, d_col], axis=1)
         else:
-            reconstructed_data = x.copy()
+            # reconstructed_data = x.copy()
+            reconstructed_data = x[:, 0:(x.shape[1] - 2)]
 
         return reconstructed_data
 
@@ -169,19 +146,12 @@ class ctdCluster:
         print("\t--- Cluster ", self._label, "-----------------------------------------")
         print("\t\t* Num Samples: ", self._num_samples)
         print("\t\t* Class Distribution: ", self.class_distribution_)
-        print("\t\t* Center: ", self.center_)
         print("\t\t* Min values per column:", self._min)
         print("\t\t* Max values per column:", self._max)
         print("\t---------------------------------------------------------\n")
 
     def get_label(self):
         return self._label
-
-    def get_center(self):
-        return self.center_
-
-    def sample(self):
-        return self.probability_distribution_.rsample()
 
     def get_num_samples(self, c=None):
         if c is None:
@@ -201,12 +171,13 @@ class ctdClusterer:
 
     It partitions the real space into clusters; then, it transforms the data of each cluster.
     """
-    def __init__(self, max_clusters=10, scaler=None, samples_per_class=(), embedding_dim=32,
+    def __init__(self, cluster_method='kmeans', max_clusters=10, scaler=None, samples_per_class=(), embedding_dim=32,
                  continuous_columns=(), discrete_columns=(), random_state=0):
         """
         Initializer
 
-        Args:
+        Args
+            cluster_method (str): The clustering algorithm to apply
             max_clusters (int): The maximum number of clusters to create
             scaler (string): A descriptor that defines a transformation on the cluster's data. Values:
 
@@ -220,6 +191,7 @@ class ctdClusterer:
             samples_per_class (List or tuple of integers): Contains the number of samples per class
             random_state: Seed the random number generators. Use the same value for reproducible results.
         """
+        self._cluster_method = cluster_method
         self._max_clusters = max_clusters
         self._random_state = random_state
         self._embedding_dim = embedding_dim
@@ -231,6 +203,7 @@ class ctdClusterer:
         self.clusters_ = []
         self.cluster_labels_ = None
         self.probability_matrix_ = None
+        self.imbalance_matrix_ = None
         self._samples_per_class = samples_per_class
 
     def perform_clustering(self, x_train, y_train, num_classes):
@@ -244,20 +217,28 @@ class ctdClusterer:
         Returns:
             Transformed data
         """
-        # Find the optimal number of clusters (best_k) for k-Means algorithm. Perform multiple executions and pick
-        # the one that produces the minimum scaled inertia.
-        mms = MinMaxScaler()
-        x_scaled = mms.fit_transform(x_train)
-        k_range = range(2, self._max_clusters)
+        # Prepare the data for clustering:
+        # 1) MinMax scale the continuous variables, and 2) OneHotEncode the discrete variables.
+        column_transformer = ColumnTransformer([
+            ("mms", MinMaxScaler(), self._continuous_columns),
+            ("ohe", OneHotEncoder(), self._discrete_columns)
+        ], sparse_threshold=0)
+        x_scaled = column_transformer.fit_transform(x_train)
 
-        # Perform multiple k-Means executions in parallel; store the scaled inertia of each clustering in the ans array.
-        scaled_inertia = Parallel(n_jobs=1)(delayed(self._run_test_kmeans)(x_scaled, k) for k in k_range)
+        # Find the optimal number of clusters (best_k).
+        # Perform multiple executions and pick the one that produces the minimum scaled inertia.
+        k_range = range(2, self._max_clusters)
+        scaled_inertia = Parallel(n_jobs=1)(delayed(self._run_clustering)(x_scaled, k) for k in k_range)
         best_k = 2 + np.argmin(scaled_inertia)
 
         # After the optimal number of clusters best_k has been determined, execute one last k-Means with best_k clusters
         self.num_clusters_ = best_k
-        cluster_method = KMeans(n_clusters=self.num_clusters_, random_state=self._random_state, n_init='auto')
-        self.cluster_labels_ = cluster_method.fit_predict(x_train)
+        if self._cluster_method == 'agglomerative':
+            cluster_method = AgglomerativeClustering(n_clusters=self.num_clusters_)
+        else:
+            cluster_method = KMeans(n_clusters=self.num_clusters_, random_state=self._random_state, n_init='auto')
+
+        self.cluster_labels_ = cluster_method.fit_predict(x_scaled)
 
         # Partition the dataset and create the appropriate Cluster objects.
         transformed_data = None
@@ -265,7 +246,7 @@ class ctdClusterer:
             x_u = x_train[self.cluster_labels_ == u, :]
             y_u = y_train[self.cluster_labels_ == u]
 
-            cluster = ctdCluster(label=u, center=cluster_method.cluster_centers_[u], scaler=self._scaler,
+            cluster = ctdCluster(label=u, scaler=self._scaler,
                                  clip=True, embedding_dim=self._embedding_dim,
                                  continuous_columns=self._continuous_columns, discrete_columns=self._discrete_columns,
                                  random_state=self._random_state)
@@ -283,25 +264,31 @@ class ctdClusterer:
 
             self.clusters_.append(cluster)
 
-        # Forge the probability matrix; Each element (i,j) stores the joint probability
-        # P(class==i, cluster==j) = P(class==i) * P(cluster==j).
+        # Forge the probability matrix; Each element (i,j) stores the conditional probability
+        # P(cluster==u | class=y) = P( (class==y) AND (cluster==u) ) / P(class==y)
         if num_classes > 1:
             self.probability_matrix_ = np.zeros((num_classes, self.num_clusters_))
+            self.imbalance_matrix_ = np.zeros((num_classes, self.num_clusters_))
             for c in range(num_classes):
-                # class_samples = self._samples_per_class[c]
-                # class_probability = class_samples / y_train.shape[0]
-                # print("\nClass:", c, "- Samples:", class_samples, ", Class probability:", class_probability)
-
                 for u in range(self.num_clusters_):
                     cluster = self.clusters_[u]
                     # print("\t Cluster:", comp, "- Samples:", cluster.get_num_samples(),
                     #      "(", cluster.get_num_samples(c), "from class", c, ")")
+                    self.probability_matrix_[c][u] = cluster.get_num_samples(c) / self._samples_per_class[c]
+                    self.imbalance_matrix_[c][u] = cluster.get_num_samples(c)
 
-                    # cluster_probability = cluster.get_num_samples() / num_samples
-                    cluster_probability = cluster.get_num_samples(c) / self._samples_per_class[c]
+            max_samples = np.max(self.imbalance_matrix_, axis=0)
+            # print(self.imbalance_matrix_)
 
-                    # self._probability_matrix[c][comp] = class_probability * cluster_probability
-                    self.probability_matrix_[c][u] = cluster_probability
+            for c in range(num_classes):
+                imb_ratios = torch.zeros(self.num_clusters_)
+                for u in range(self.num_clusters_):
+                    # print("Row:", c, "Col:", u, "Max of col=", max_samples[u])
+                    if self.imbalance_matrix_[c][u] > 1:
+                        imb_ratios[u] = 1 - self.imbalance_matrix_[c][u] / max_samples[u]
+                prob_dist = torch.nn.Softmax(dim=0)(imb_ratios)
+                # print(imb_ratios)
+                # print(prob_dist)
 
         np.random.shuffle(transformed_data)
 
@@ -330,7 +317,7 @@ class ctdClusterer:
         # (x_clean, y_clean) is the new dataset without the outliers
         # print("Clean Dataset Shape:", x_clean.shape)
 
-    def _run_test_kmeans(self, scaled_data, k, alpha_k=0.02):
+    def _run_clustering(self, scaled_data, k, alpha_k=0.02):
         """
         Args:
         scaled_data: matrix
@@ -348,9 +335,21 @@ class ctdClusterer:
         inertia_o = np.square((scaled_data - scaled_data.mean(axis=0))).sum()
 
         # Fit k-means
-        kmeans = KMeans(n_clusters=k, random_state=self._random_state, n_init='auto')
-        kmeans.fit(scaled_data)
-        scaled_inertia = kmeans.inertia_ / inertia_o + alpha_k * k
+        if self._cluster_method == 'agglomerative':
+            hac = AgglomerativeClustering(n_clusters=k, compute_distances=True)
+            hac.fit(scaled_data)
+
+            inertia = 0
+            for u in range(k):
+                cluster_data = scaled_data[hac.labels_ == u, :]
+                inertia += np.square((cluster_data - cluster_data.mean(axis=0))).sum()
+
+        else:
+            kmeans = KMeans(n_clusters=k, random_state=self._random_state, n_init='auto')
+            kmeans.fit(scaled_data)
+            inertia = kmeans.inertia_
+
+        scaled_inertia = inertia / inertia_o + alpha_k * k
 
         return scaled_inertia
 

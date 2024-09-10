@@ -13,10 +13,12 @@ from generators.sb_gan import sbGAN
 from generators.ct_gan import ctGAN
 from generators.ctd_gan import ctdGAN
 from generators.cbr import CBR
+from TabularTransformer import TabularTransformer
 
 from sdv.single_table import GaussianCopulaSynthesizer
 from sdv.single_table import CTGANSynthesizer
 from sdv.single_table import TVAESynthesizer
+from sdv.single_table import CopulaGANSynthesizer
 
 
 class BaseResampler:
@@ -36,7 +38,16 @@ class BaseResampler:
         x_train = dataset.x_[training_set_rows]
         y_train = dataset.y_[training_set_rows]
 
-        x_bal, y_bal = self._model.fit_resample(x_train, y_train)
+        # OneHot encode the categorical variables
+        table_transformer = TabularTransformer(cont_normalizer='none', clip=False)
+        table_transformer.fit(x_train, dataset.categorical_columns)
+        x_transformed = table_transformer.transform(x_train)
+
+        # Fit resample
+        x_bal, y_bal = self._model.fit_resample(x_transformed, y_train)
+
+        # Inverse the OneHot transformations to retrieve the original categorical columns
+        x_bal = table_transformer.inverse_transform(x_bal)
 
         return x_bal, y_bal
 
@@ -91,8 +102,6 @@ class SDVResampler(BaseResampler):
             if cls != majority_class:
                 samples_to_generate = num_majority_samples - gen_samples_ratio[cls]
 
-                generated_samples = None
-
                 # Generate the appropriate number of samples to equalize cls with the majority class.
                 # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
                 reference_data = pd.DataFrame(data={str(dataset.class_column): [cls] * samples_to_generate})
@@ -121,8 +130,11 @@ class TestSynthesizers:
             random_state: Control the randomization of the algorithm.
             sampling_strategy: how the member samplers generate/remove/replace samples.
 
-             - If a float is passed, it corresponds to the desired ratio of the number of samples in the minority class over the number of samples in the majority class after resampling. float is only available for binary classification. An error is raised for multi-class classification.
-             - If a string is passed, specify the class targeted by the resampling. The number of samples in the different classes will be equalized. Possible choices are:
+             - If a float is passed, it corresponds to the desired ratio of the number of samples in the minority class
+               over the number of samples in the majority class after resampling. float is only available for binary
+               classification. An error is raised for multi-class classification.
+             - If a string is passed, specify the class targeted by the resampling. The number of samples in the
+               different classes will be equalized. Possible choices are:
 
                * 'minority': resample only the minority class;
                * 'not minority': resample all classes but the minority class;
@@ -130,20 +142,22 @@ class TestSynthesizers:
                * 'all': resample all classes;
                * 'auto': equivalent to 'not majority'.
 
-             - If a dictionary is passed, the keys correspond to the targeted classes. The values correspond to the desired number of samples for each targeted class.
-             - When callable, function taking y and returns a dict. The keys correspond to the targeted classes. The values correspond to the desired number of samples for each class.`
+             - If a dictionary is passed, the keys correspond to the targeted classes. The values correspond to the
+               desired number of samples for each targeted class.
+             - When callable, function taking y and returns a dict. The keys correspond to the targeted classes.
+               The values correspond to the desired number of samples for each class.`
 
             kwargs: extra arguments
         """
-        disc = (256, 256)
+        disc = (125, 256)
         gen = (256, 256)
-        emb_dim = 32
+        emb_dim = 128
         knn = 10
         rad = 1
         pac = 1
         epochs = 300
         batch_size = 32
-        max_clusters = 10
+        max_clusters = 20
 
         # Prepare the column descriptors for the SDV models
         dp_cols = {}
@@ -190,35 +204,56 @@ class TestSynthesizers:
                                  verbose=False)
 
         # Tabular Variational Autoencoder (TVAE)
-        t_vae = TVAESynthesizer(metadata, enforce_min_max_values=False, enforce_rounding=False, epochs=1000)
+        t_vae = TVAESynthesizer(metadata, enforce_min_max_values=False, enforce_rounding=False, epochs=1000,
+                                verbose=False)
 
         # Gaussian Copula
         g_cop = GaussianCopulaSynthesizer(metadata, enforce_min_max_values=False, enforce_rounding=False)
 
+        # CopulaGAN
+        cop_gan = CopulaGANSynthesizer(metadata, enforce_min_max_values=False, enforce_rounding=False, epochs=epochs,
+                                       verbose=False)
+
         # CTD Generative Adversarial Network (ctdGAN)
         ctd_gan = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs, batch_size=batch_size,
-                         pac=pac, scaler='mms11', max_clusters=max_clusters, random_state=random_state)
+                         pac=pac, scaler='mms11', cluster_method='kmeans', max_clusters=max_clusters,
+                         random_state=random_state)
+        ctd_gan_1 = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs, batch_size=batch_size,
+                           pac=pac, scaler='mms11', cluster_method='agglomerative', max_clusters=max_clusters,
+                           random_state=random_state)
+        ctd_gan_2 = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs, batch_size=batch_size,
+                           pac=pac, scaler='stds', cluster_method='kmeans', max_clusters=max_clusters,
+                           random_state=random_state)
+        ctd_gan_3 = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs, batch_size=batch_size,
+                           pac=pac, scaler='stds', cluster_method='agglomerative', max_clusters=max_clusters,
+                           random_state=random_state)
 
         # All over-samplers.
-        self.over_samplers_all_ = (
+        self.over_samplers_ = (
             BaseResampler(name="None", model=None, random_state=random_state),
             BaseResampler(name="ROS", model=ros, random_state=random_state),
             BaseResampler(name="SMOTE", model=smote, random_state=random_state),
             BaseResampler(name="BorderSMOTE", model=b_smote, random_state=random_state),
             BaseResampler(name="SVM-SMOTE", model=svm_smote, random_state=random_state),
-            BaseResampler(name="KMeans SMOTE", model=km_smote, random_state=random_state),
+            # BaseResampler(name="KMeans SMOTE", model=km_smote, random_state=random_state),
             BaseResampler(name="ADASYN", model=adasyn, random_state=random_state),
             BaseResampler(name="CBR", model=cbr, random_state=random_state),
             BaseResampler(name="C-GAN", model=c_gan, random_state=random_state),
             BaseResampler(name="SB-GAN", model=sb_gan, random_state=random_state),
+
             SDVResampler(name="CTGAN", model=ctgan, random_state=random_state),
             SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
             SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
-            CTResampler("ctGAN", model=ctgan_1, random_state=random_state),
-            CTResampler("ctdGAN", model=ctd_gan,random_state=random_state),
+            SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
+            # CTResampler("ctGAN", model=ctgan_1, random_state=random_state),
+
+            CTResampler("ctdGAN_mms_kmeans", model=ctd_gan,random_state=random_state),
+            CTResampler("ctdGAN_mms_hac", model=ctd_gan_1, random_state=random_state),
+            CTResampler("ctdGAN_std_kmeans", model=ctd_gan_2, random_state=random_state),
+            CTResampler("ctdGAN_std_hac", model=ctd_gan_3, random_state=random_state),
         )
 
-        self.over_samplers_ = (
+        self.over_samplers_sdv_ = (
             SDVResampler(name="CTGAN", model=ctgan, random_state=random_state),
             SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
             SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
