@@ -154,9 +154,9 @@ class TestSynthesizers:
         emb_dim = 128
         knn = 10
         rad = 1
-        pac = 1
+        pac = 10
         epochs = 300
-        batch_size = 32
+        batch_size = 30
         max_clusters = 20
 
         # Prepare the column descriptors for the SDV models
@@ -215,42 +215,145 @@ class TestSynthesizers:
                                        verbose=False)
 
         # CTD Generative Adversarial Network (ctdGAN)
-        ctd_gan = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs, batch_size=batch_size,
-                         pac=pac, scaler='mms11', cluster_method='kmeans', max_clusters=max_clusters,
-                         random_state=random_state)
-        ctd_gan_1 = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs, batch_size=batch_size,
-                           pac=pac, scaler='mms11', cluster_method='agglomerative', max_clusters=max_clusters,
-                           random_state=random_state)
-        ctd_gan_2 = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs, batch_size=batch_size,
-                           pac=pac, scaler='stds', cluster_method='kmeans', max_clusters=max_clusters,
-                           random_state=random_state)
-        ctd_gan_3 = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs, batch_size=batch_size,
-                           pac=pac, scaler='stds', cluster_method='agglomerative', max_clusters=max_clusters,
-                           random_state=random_state)
+        pac1_kmn_mms_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                    batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                    pac=1, scaler='mms11', cluster_method='kmeans', sampling_strategy='auto')
+
+        pac1_hac_mms_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                    batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                    pac=1, scaler='mms11', cluster_method='hac', sampling_strategy='auto')
+
+        pac1_gmm_mms_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                    batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                    pac=1, scaler='mms11', cluster_method='gmm', sampling_strategy='auto')
+
+        pac1_kmn_stds_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=1, scaler='stds', cluster_method='kmeans', sampling_strategy='auto')
+
+        pac1_hac_stds_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=1, scaler='stds', cluster_method='hac', sampling_strategy='auto')
+
+        pac1_gmm_stds_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=1, scaler='stds', cluster_method='gmm', sampling_strategy='auto')
+
+        pac1_kmn_mms_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                    batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                    pac=1, scaler='mms11', cluster_method='kmeans', sampling_strategy='bal')
+
+        pac1_hac_mms_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                    batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                    pac=1, scaler='mms11', cluster_method='hac', sampling_strategy='bal')
+
+        pac1_gmm_mms_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                    batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                    pac=1, scaler='mms11', cluster_method='gmm', sampling_strategy='bal')
+
+        pac1_kmn_stds_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=1, scaler='stds', cluster_method='kmeans', sampling_strategy='bal')
+
+        pac1_hac_stds_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=1, scaler='stds', cluster_method='hac', sampling_strategy='bal')
+
+        pac1_gmm_stds_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=1, scaler='stds', cluster_method='gmm', sampling_strategy='bal')
+
+        pac10_kmn_mms_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=10, scaler='mms11', cluster_method='kmeans', sampling_strategy='auto')
+
+        pac10_hac_mms_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=10, scaler='mms11', cluster_method='hac', sampling_strategy='auto')
+
+        pac10_gmm_mms_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=10, scaler='mms11', cluster_method='gmm', sampling_strategy='auto')
+
+        pac10_kmn_stds_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                      batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                      pac=10, scaler='stds', cluster_method='kmeans', sampling_strategy='auto')
+
+        pac10_hac_stds_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                      batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                      pac=10, scaler='stds', cluster_method='hac', sampling_strategy='auto')
+
+        pac10_gmm_stds_probs = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                      batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                      pac=10, scaler='stds', cluster_method='gmm', sampling_strategy='auto')
+
+        pac10_kmn_mms_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=10, scaler='mms11', cluster_method='kmeans', sampling_strategy='bal')
+
+        pac10_hac_mms_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=10, scaler='mms11', cluster_method='hac', sampling_strategy='bal')
+
+        pac10_gmm_mms_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                     batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                     pac=10, scaler='mms11', cluster_method='gmm', sampling_strategy='bal')
+
+        pac10_kmn_stds_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                      batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                      pac=10, scaler='stds', cluster_method='kmeans', sampling_strategy='bal')
+
+        pac10_hac_stds_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                      batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                      pac=10, scaler='stds', cluster_method='hac', sampling_strategy='bal')
+
+        pac10_gmm_stds_resam = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
+                                      batch_size=batch_size, max_clusters=max_clusters, random_state=random_state,
+                                      pac=10, scaler='stds', cluster_method='gmm', sampling_strategy='bal')
 
         # All over-samplers.
         self.over_samplers_ = (
-            BaseResampler(name="None", model=None, random_state=random_state),
-            BaseResampler(name="ROS", model=ros, random_state=random_state),
-            BaseResampler(name="SMOTE", model=smote, random_state=random_state),
-            BaseResampler(name="BorderSMOTE", model=b_smote, random_state=random_state),
-            BaseResampler(name="SVM-SMOTE", model=svm_smote, random_state=random_state),
+            # BaseResampler(name="None", model=None, random_state=random_state),
+            # BaseResampler(name="ROS", model=ros, random_state=random_state),
+            # BaseResampler(name="SMOTE", model=smote, random_state=random_state),
+            # BaseResampler(name="BorderSMOTE", model=b_smote, random_state=random_state),
+            # BaseResampler(name="SVM-SMOTE", model=svm_smote, random_state=random_state),
             # BaseResampler(name="KMeans SMOTE", model=km_smote, random_state=random_state),
-            BaseResampler(name="ADASYN", model=adasyn, random_state=random_state),
-            BaseResampler(name="CBR", model=cbr, random_state=random_state),
-            BaseResampler(name="C-GAN", model=c_gan, random_state=random_state),
-            BaseResampler(name="SB-GAN", model=sb_gan, random_state=random_state),
+            # BaseResampler(name="ADASYN", model=adasyn, random_state=random_state),
+            # BaseResampler(name="CBR", model=cbr, random_state=random_state),
+            # BaseResampler(name="C-GAN", model=c_gan, random_state=random_state),
+            # BaseResampler(name="SB-GAN", model=sb_gan, random_state=random_state),
 
-            SDVResampler(name="CTGAN", model=ctgan, random_state=random_state),
-            SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
-            SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
-            SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
+            # SDVResampler(name="CTGAN", model=ctgan, random_state=random_state),
+            # SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
+            # SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
+            # SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
             # CTResampler("ctGAN", model=ctgan_1, random_state=random_state),
 
-            CTResampler("ctdGAN_mms_kmeans", model=ctd_gan,random_state=random_state),
-            CTResampler("ctdGAN_mms_hac", model=ctd_gan_1, random_state=random_state),
-            CTResampler("ctdGAN_std_kmeans", model=ctd_gan_2, random_state=random_state),
-            CTResampler("ctdGAN_std_hac", model=ctd_gan_3, random_state=random_state),
+            CTResampler("pac1_kmn_mms_probs", model=pac1_kmn_mms_probs, random_state=random_state),
+            CTResampler("pac1_hac_mms_probs", model=pac1_hac_mms_probs, random_state=random_state),
+            CTResampler("pac1_gmm_mms_probs", model=pac1_gmm_mms_probs, random_state=random_state),
+            CTResampler("pac1_kmn_stds_probs", model=pac1_kmn_stds_probs, random_state=random_state),
+            CTResampler("pac1_hac_stds_probs", model=pac1_hac_stds_probs, random_state=random_state),
+            CTResampler("pac1_gmm_stds_probs", model=pac1_gmm_stds_probs, random_state=random_state),
+            CTResampler("pac1_kmn_mms_resam", model=pac1_kmn_mms_resam, random_state=random_state),
+            CTResampler("pac1_hac_mms_resam", model=pac1_hac_mms_resam, random_state=random_state),
+            CTResampler("pac1_gmm_mms_resam", model=pac1_gmm_mms_resam, random_state=random_state),
+            CTResampler("pac1_kmn_stds_resam", model=pac1_kmn_stds_resam, random_state=random_state),
+            CTResampler("pac1_hac_stds_resam", model=pac1_hac_stds_resam, random_state=random_state),
+            CTResampler("pac1_gmm_stds_resam", model=pac1_gmm_stds_resam, random_state=random_state),
+            CTResampler("pac10_kmn_mms_probs", model=pac10_kmn_mms_probs, random_state=random_state),
+            CTResampler("pac10_hac_mms_probs", model=pac10_hac_mms_probs, random_state=random_state),
+            CTResampler("pac10_gmm_mms_probs", model=pac10_gmm_mms_probs, random_state=random_state),
+            CTResampler("pac10_kmn_stds_probs", model=pac10_kmn_stds_probs, random_state=random_state),
+            CTResampler("pac10_hac_stds_probs", model=pac10_hac_stds_probs, random_state=random_state),
+            CTResampler("pac10_gmm_stds_probs", model=pac10_gmm_stds_probs, random_state=random_state),
+            CTResampler("pac10_kmn_mms_resam", model=pac10_kmn_mms_resam, random_state=random_state),
+            CTResampler("pac10_hac_mms_resam", model=pac10_hac_mms_resam, random_state=random_state),
+            CTResampler("pac10_gmm_mms_resam", model=pac10_gmm_mms_resam, random_state=random_state),
+            CTResampler("pac10_kmn_stds_resam", model=pac10_kmn_stds_resam, random_state=random_state),
+            CTResampler("pac10_hac_stds_resam", model=pac10_hac_stds_resam, random_state=random_state),
+            CTResampler("pac10_gmm_stds_resam", model=pac10_gmm_stds_resam, random_state=random_state),
         )
 
         self.over_samplers_sdv_ = (

@@ -135,20 +135,20 @@ class Critic(nn.Module):
     def __init__(self, input_dim, discriminator_dim, pac=10):
         super().__init__()
         dim = input_dim * pac
-        self.pac = pac
-        self.pac_dim = dim
+        self._pac = pac
+        self._pac_dim = dim
         seq = []
         for item in list(discriminator_dim):
             seq += [nn.Linear(dim, item), nn.LeakyReLU(0.2), nn.Dropout(0.5)]
             dim = item
 
         seq += [nn.Linear(dim, 1)]
-        self.seq = nn.Sequential(*seq)
+        self._seq = nn.Sequential(*seq)
 
-    def calc_gradient_penalty(self, real_data, fake_data, device='cpu', pac=10, lambda_=10):
+    def calc_gradient_penalty(self, real_data, fake_data, device='cpu', lambda_=10):
         """Compute the gradient penalty. From the paper on improved WGAN training."""
-        alpha = torch.rand(real_data.size(0) // pac, 1, 1, device=device)
-        alpha = alpha.repeat(1, pac, real_data.size(1))
+        alpha = torch.rand(real_data.size(0) // self._pac, 1, 1, device=device)
+        alpha = alpha.repeat(1, self._pac, real_data.size(1))
         alpha = alpha.view(-1, real_data.size(1))
 
         interpolates = alpha * real_data + ((1 - alpha) * fake_data)
@@ -161,12 +161,12 @@ class Critic(nn.Module):
             create_graph=True, retain_graph=True, only_inputs=True
         )[0]
 
-        gradients_view = gradients.view(-1, pac * real_data.size(1)).norm(2, dim=1) - 1
+        gradients_view = gradients.view(-1, self._pac * real_data.size(1)).norm(2, dim=1) - 1
         gradient_penalty = (gradients_view ** 2).mean() * lambda_
 
         return gradient_penalty
 
     def forward(self, x):
         """Apply the Discriminator to the `input_`."""
-        assert x.size()[0] % self.pac == 0
-        return self.seq(x.view(-1, self.pac_dim))
+        assert x.size()[0] % self._pac == 0
+        return self._seq(x.view(-1, self._pac_dim))

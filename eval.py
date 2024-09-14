@@ -48,17 +48,22 @@ def test_model(model, dataset, seed):
     elif model == "CGAN":
         gan = cGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, random_state=seed, epochs=epochs)
     elif model == "CTGAN":
-        gan = ctGAN(discriminator=(256, 256), generator=(256, 256), pac=1, epochs=epochs)
+        gan = ctGAN(discriminator=(256, 256), generator=(256, 256), pac=10, batch_size=100, epochs=epochs)
     elif model == "CTDGAN":
-        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=1, max_clusters=20, epochs=epochs,
+        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=10, max_clusters=20, epochs=epochs,
                      batch_size=128, scaler='mms11', cluster_method='kmeans', embedding_dim=128, random_state=seed)
+    elif model == "CTDGAN-R":
+        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=10, max_clusters=20, epochs=epochs,
+                     batch_size=30, scaler='stds', cluster_method='gmm', embedding_dim=128, random_state=seed,
+                     sampling_strategy='bal_class_cluster')
+
     else:
         print("No model specified")
         exit()
 
     balanced_data = gan.fit_resample(x, y, categorical_columns=dataset['categorical_cols'])
     print("Balanced Data shape:", balanced_data[0].shape)
-    print(balanced_data[0])
+    # print(balanced_data[0])
     print("Finished in", time.time() - t_s, "sec")
 
 

@@ -523,7 +523,7 @@ class ctGAN(GANSynthesizer):
         return self.sample_original(n=num_samples, condition_column=str(self._input_dim),
                                     condition_value=y)[:, 0:self._input_dim]
 
-    def fit_resample(self, x_train, y_train):
+    def fit_resample(self, x_train, y_train, categorical_columns=None):
         """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. The function renders ctGAN
         compatible with the `imblearn`'s interface, allowing its usage in over-sampling/under-sampling pipelines.
 

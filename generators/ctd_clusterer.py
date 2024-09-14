@@ -1,9 +1,9 @@
 import numpy as np
 
-import torch
-
 from sklearn.ensemble import IsolationForest
+
 from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 
@@ -95,6 +95,7 @@ class ctdCluster:
             for d_col in self._discrete_columns:
                 transformed = np.insert(transformed, d_col, x[:, d_col], axis=1)
             # print("After Transformation & concat with Discrete Cols:\n", transformed)
+            # exit()
             return transformed
         else:
             return x
@@ -177,9 +178,13 @@ class ctdClusterer:
         Initializer
 
         Args
-            cluster_method (str): The clustering algorithm to apply
+            cluster_method (str): The clustering algorithm to apply. Supported values:
+              * kmeans: K-Means
+              * hac: Hierarchical Agglomerative Clustering
+              * gmm: Gaussian Mixture Model
+
             max_clusters (int): The maximum number of clusters to create
-            scaler (string): A descriptor that defines a transformation on the cluster's data. Values:
+            scaler (string): A descriptor that defines a transformation on the cluster's data. Supported values:
 
               * '`None`'  : No transformation takes place; the data is considered immutable
               * '`stds`'  : Standard scaler
@@ -192,13 +197,19 @@ class ctdClusterer:
             random_state: Seed the random number generators. Use the same value for reproducible results.
         """
         self._cluster_method = cluster_method
+        if cluster_method not in ['kmeans', 'hac', 'gmm']:
+            self._cluster_method = 'kmeans'
+
+        self._scaler = scaler
+        if scaler not in ['None', 'stds', 'mms01', 'mms11']:
+            self._cluster_method = 'stds'
+
         self._max_clusters = max_clusters
         self._random_state = random_state
         self._embedding_dim = embedding_dim
         self._continuous_columns = continuous_columns
         self._discrete_columns = discrete_columns
 
-        self._scaler = scaler
         self.num_clusters_ = 0
         self.clusters_ = []
         self.cluster_labels_ = None
@@ -206,13 +217,14 @@ class ctdClusterer:
         self.imbalance_matrix_ = None
         self._samples_per_class = samples_per_class
 
-    def perform_clustering(self, x_train, y_train, num_classes):
+    def perform_clustering(self, x_train, y_train, num_classes, pac):
         """
 
         Args:
             x_train: Training data
             y_train: The classes of the training samples
             num_classes: The number of distinct classes of the training data
+            pac (int): The number of samples to group together as input to the Critic.
 
         Returns:
             Transformed data
@@ -233,10 +245,15 @@ class ctdClusterer:
 
         # After the optimal number of clusters best_k has been determined, execute one last k-Means with best_k clusters
         self.num_clusters_ = best_k
-        if self._cluster_method == 'agglomerative':
+        if self._cluster_method == 'hac':
             cluster_method = AgglomerativeClustering(n_clusters=self.num_clusters_)
+        elif self._cluster_method == 'kmeans':
+            cluster_method = KMeans(n_clusters=self.num_clusters_, n_init='auto', random_state=self._random_state)
+        elif self._cluster_method == 'gmm':
+            cluster_method = GaussianMixture(n_components=self.num_clusters_, covariance_type='full',
+                                             random_state=self._random_state)
         else:
-            cluster_method = KMeans(n_clusters=self.num_clusters_, random_state=self._random_state, n_init='auto')
+            cluster_method = AgglomerativeClustering(n_clusters=self.num_clusters_)
 
         self.cluster_labels_ = cluster_method.fit_predict(x_scaled)
 
@@ -277,19 +294,14 @@ class ctdClusterer:
                     self.probability_matrix_[c][u] = cluster.get_num_samples(c) / self._samples_per_class[c]
                     self.imbalance_matrix_[c][u] = cluster.get_num_samples(c)
 
-            max_samples = np.max(self.imbalance_matrix_, axis=0)
-            # print(self.imbalance_matrix_)
+        # Pad the dataset to align with the pac parameter (Create integral number of groups of pac samples).
+        dataset_rows = transformed_data.shape[0]
+        if dataset_rows % pac != 0:
+            required_samples = pac * (dataset_rows // pac + 1) - dataset_rows
+            random_samples = transformed_data[np.random.randint(0, dataset_rows, (required_samples,))]
+            transformed_data = np.vstack((transformed_data, random_samples))
 
-            for c in range(num_classes):
-                imb_ratios = torch.zeros(self.num_clusters_)
-                for u in range(self.num_clusters_):
-                    # print("Row:", c, "Col:", u, "Max of col=", max_samples[u])
-                    if self.imbalance_matrix_[c][u] > 1:
-                        imb_ratios[u] = 1 - self.imbalance_matrix_[c][u] / max_samples[u]
-                prob_dist = torch.nn.Softmax(dim=0)(imb_ratios)
-                # print(imb_ratios)
-                # print(prob_dist)
-
+        # Shuffle the dataset
         np.random.shuffle(transformed_data)
 
         return transformed_data
@@ -317,12 +329,12 @@ class ctdClusterer:
         # (x_clean, y_clean) is the new dataset without the outliers
         # print("Clean Dataset Shape:", x_clean.shape)
 
-    def _run_clustering(self, scaled_data, k, alpha_k=0.02):
+    def _run_clustering(self, scaled_data, num_clusters, alpha_k=0.02):
         """
         Args:
         scaled_data: matrix
             scaled data. rows are samples and columns are features for clustering
-        k: int
+        max_clusters: int
             current k for applying KMeans
         alpha_k: float
             manually tuned factor that gives penalty to the number of clusters
@@ -332,26 +344,30 @@ class ctdClusterer:
                 scaled inertia value for current k
         """
 
+        ret_val = 0
         inertia_o = np.square((scaled_data - scaled_data.mean(axis=0))).sum()
 
-        # Fit k-means
-        if self._cluster_method == 'agglomerative':
-            hac = AgglomerativeClustering(n_clusters=k, compute_distances=True)
+        if self._cluster_method == 'hac':
+            hac = AgglomerativeClustering(n_clusters=num_clusters, compute_distances=True)
             hac.fit(scaled_data)
 
             inertia = 0
-            for u in range(k):
+            for u in range(num_clusters):
                 cluster_data = scaled_data[hac.labels_ == u, :]
                 inertia += np.square((cluster_data - cluster_data.mean(axis=0))).sum()
+            ret_val = inertia / inertia_o + alpha_k * num_clusters
 
-        else:
-            kmeans = KMeans(n_clusters=k, random_state=self._random_state, n_init='auto')
+        elif self._cluster_method == 'kmeans':
+            kmeans = KMeans(n_clusters=num_clusters, random_state=self._random_state, n_init='auto')
             kmeans.fit(scaled_data)
-            inertia = kmeans.inertia_
+            ret_val = kmeans.inertia_ / inertia_o + alpha_k * num_clusters
 
-        scaled_inertia = inertia / inertia_o + alpha_k * k
+        elif self._cluster_method == 'gmm':
+            gmm = GaussianMixture(n_components=num_clusters, covariance_type='full', random_state=self._random_state)
+            gmm.fit(scaled_data)
+            ret_val = gmm.bic(scaled_data)
 
-        return scaled_inertia
+        return ret_val
 
     def display(self):
         print("Num Clusters: ", self.num_clusters_)

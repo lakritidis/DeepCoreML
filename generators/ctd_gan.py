@@ -25,8 +25,8 @@ class ctdGAN(GANSynthesizer):
     """
 
     def __init__(self, discriminator=(128, 128), generator=(256, 256), embedding_dim=128, epochs=300, batch_size=32,
-                 scaler='mms11', pac=1, lr=2e-4, decay=1e-6, sampling_strategy='auto',
-                 cluster_method='kmeans', max_clusters=20, random_state=0):
+                 pac=1, lr=2e-4, decay=1e-6, sampling_strategy='auto',
+                 scaler='stds', cluster_method='kmeans', max_clusters=20, random_state=0):
         """
         ctdGAN initializer
 
@@ -44,7 +44,7 @@ class ctdGAN(GANSynthesizer):
               * '`stds`'  : Standard scaler
               * '`mms01`' : Min-Max scaler in the range (0,1)
               * '`mms11`' : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
-            pac (int): The number of samples to group together when applying the Critic.
+            pac (int): The number of samples to group together as input to the Critic.
             lr (real): The value of the learning rate parameter for the Generator/Critic Adam optimizers.
             decay (real): The value of the weight decay parameter for the Generator/Critic Adam optimizers.
             sampling_strategy (string or dictionary): How the algorithm generates samples:
@@ -146,7 +146,7 @@ class ctdGAN(GANSynthesizer):
                                                    discrete_columns=tuple(self._categorical_columns),
                                                    embedding_dim=self.embedding_dim_, random_state=self._random_state)
 
-        train_data = self._clustered_transformer.perform_clustering(x_train, y_train, self._n_classes)
+        train_data = self._clustered_transformer.perform_clustering(x_train, y_train, self._n_classes, self.pac_)
         self._n_clusters = self._clustered_transformer.num_clusters_
 
         # ====== Append the cluster and class labels to the collection of discrete columns
@@ -175,24 +175,17 @@ class ctdGAN(GANSynthesizer):
              * `latent_clusters_ohe` :  One-hot-encoded latent clusters.
              * `latent_classes_ohe:` :  One-hot-encoded latent classes.
         """
-        num_cols = len(self._discrete_transformer.output_info_list)
-        col = 0
 
         # === Discrete variables - Simple random one-hot-encoded integers
+        col = 0
         latent_disc = []
-        latent_clusters = []
         for column_metadata in self._discrete_transformer.output_info_list:
             for span_info in column_metadata:
                 col += 1
                 if span_info.activation_fn == 'softmax':
                     col_length = span_info.dim
-
-                    # random_numbers = torch.from_numpy(np.random.randint(0, col_length, num_samples)).to(torch.int64)
                     random_numbers = torch.randint(low=0, high=col_length, size=(1, num_samples))[0]
                     z_disc = nn.functional.one_hot(random_numbers, num_classes=col_length)
-
-                    if col == num_cols - 1:
-                        latent_clusters = random_numbers.to(torch.int64)
                     latent_disc.append(z_disc)
 
         latent_disc = torch.hstack(latent_disc).to(self._device)
@@ -201,13 +194,6 @@ class ctdGAN(GANSynthesizer):
         mean = torch.zeros(num_samples, self.embedding_dim_)
         std = mean + 1
         latent_cont = torch.normal(mean=mean, std=std).to(self._device)
-
-        # latent_cont = []
-        # for s in range(num_samples):
-        #    latent_cluster_object = self._clustered_transformer.get_cluster(latent_clusters[s])
-        #    z_cont = latent_cluster_object.sample()
-        #    latent_cont.append(z_cont)
-        # latent_cont = torch.stack(latent_cont).to(self._device)
 
         return latent_cont, latent_disc
 
@@ -326,9 +312,11 @@ class ctdGAN(GANSynthesizer):
         # abort silently and return without updating the model parameters.
         num_samples = real_data.shape[0]
         if num_samples % self.pac_ != 0:
+            print("pac error")
             return 0, 0
 
-        packed_samples = num_samples // self.pac_
+        # packed_samples = num_samples // self.pac_
+        packed_samples = num_samples
 
         real_data = real_data.to(torch.float).to(self._device)
 
@@ -344,7 +332,7 @@ class ctdGAN(GANSynthesizer):
 
         # Pass the mixed data to the Discriminator and train the Discriminator (update its weights with backprop).
         # The loss function quantifies the Discriminator's ability to classify a real/fake sample as real/fake.
-        pen = self.D_.calc_gradient_penalty(real_data, generated_data, self._device, self.pac_)
+        pen = self.D_.calc_gradient_penalty(real_data, generated_data, device=self._device)
         disc_loss = self.discriminator_loss(real_data, generated_data)
 
         self.D_optimizer_.zero_grad(set_to_none=True)
@@ -360,9 +348,6 @@ class ctdGAN(GANSynthesizer):
 
         # Pass the latent data through the Generator to synthesize samples
         generated_data = self._apply_activate(self.G_(latent_data))
-
-        # Reshape the data to feed it to Discriminator ( (num_samples, dimensionality) -> ( -1, pac * dimensionality )
-        # generated_data = generated_data.reshape((-1, self.pac_ * self._discrete_transformer.output_dimensions))
 
         # Compute and back propagate the Generator loss
         d_predictions = self.D_(generated_data)
@@ -432,12 +417,13 @@ class ctdGAN(GANSynthesizer):
         """
         self.train(x_train, y_train)
 
-    def sample(self, num_samples, y=None):
+    def sample(self, num_samples, y=None, u=None):
         """ Create artificial samples using the GAN's Generator.
 
         Args:
             num_samples (int): The number of samples to generate.
             y (int): A condition on the class of the generated samples.
+            u (int): A condition on the cluster of the generated samples.
 
         Returns:
             Artificial data instances created by the Generator.
@@ -464,7 +450,6 @@ class ctdGAN(GANSynthesizer):
 
             # Select random values for the discrete variables. These values will be later one-hot-encoded.
             latent_disc = []
-            # latent_cont = []
             col = 0
             column_labels = []
             for column_metadata in self._discrete_transformer.output_info_list:
@@ -472,10 +457,10 @@ class ctdGAN(GANSynthesizer):
                 for span_info in column_metadata:
                     if span_info.activation_fn == 'softmax':
                         column_labels.append(str(col - 1))
-                        col_length = span_info.dim
 
-                        # Discrete variables excluding the class and the cluster
+                        # Discrete variables excluding the two last columns (i.e. the cluster and class labels)
                         if col < num_columns - 1:
+                            col_length = span_info.dim
                             random_discrete_vals = np.random.randint(low=0, high=col_length, size=num_samples)
                             latent_disc.append(random_discrete_vals)
 
@@ -483,19 +468,19 @@ class ctdGAN(GANSynthesizer):
             # corresponding p_matrix. In the same time, sample the probability distribution of each cluster to
             # get the latent representation of the continuous variables.
             latent_clusters_objs = []
-
             for s in range(num_samples):
                 lat_class = int(latent_classes[s])
                 p_matrix = self._clustered_transformer.probability_matrix_[lat_class]
 
-                # Select the cluster with probability self._cc_prob_vector
-                latent_clusters[s] = np.random.choice(
-                    a=np.arange(self._n_clusters, dtype=int), size=None, replace=True, p=p_matrix)
+                # Select the cluster with probability coming from the probability matrix of ctdClusterer
+                if u is None:
+                    latent_clusters[s] = np.random.choice(
+                        a=np.arange(self._n_clusters, dtype=int), size=None, replace=True, p=p_matrix)
+                else:
+                    latent_clusters[s] = u
 
                 latent_cluster_object = self._clustered_transformer.get_cluster(int(latent_clusters[s]))
                 latent_clusters_objs.append(latent_cluster_object)
-
-                # latent_cont.append(latent_cluster_object.sample())
 
             # Put all discrete variables together into the same matrix (including the class and cluster labels)
             latent_disc.append(latent_clusters)
@@ -539,7 +524,7 @@ class ctdGAN(GANSynthesizer):
                     num_generated_samples += 1
                     if num_generated_samples > num_samples:
                         return_samples = np.vstack(reconstructed_samples)
-                        print("\t\t\tCreated ", return_samples.shape, "samples")
+                        # print("\t\t\tCreated ", return_samples.shape, "samples")
                         return return_samples
                     reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
                     reconstructed_samples.append(reconstructed_sample)
@@ -553,7 +538,7 @@ class ctdGAN(GANSynthesizer):
                 break
 
         return_samples = np.vstack(reconstructed_samples)
-        print("\t\t\tIncompletely Created ", return_samples.shape, "samples")
+        # print("\t\t\tIncompletely Created ", return_samples.shape, "samples")
         return return_samples
 
     def fit_resample(self, x_train, y_train, categorical_columns=()):
@@ -596,12 +581,40 @@ class ctdGAN(GANSynthesizer):
 
                     if samples_to_generate > 1:
                         # Generate the appropriate number of samples to equalize cls with the majority class.
-                        # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
                         generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
                         generated_classes = np.full(generated_samples.shape[0], cls)
 
                         x_resampled = np.vstack((x_resampled, generated_samples))
                         y_resampled = np.hstack((y_resampled, generated_classes))
+
+        if self._sampling_strategy == 'bal':
+            majority_class = np.array(self._samples_per_class).argmax()
+            imb_matrix = self._clustered_transformer.imbalance_matrix_
+
+            # Perform oversampling by performing cluster-based oversampling
+            majority_samples = np.max(imb_matrix, axis=0)
+            majority_classes = np.argmax(imb_matrix, axis=0)
+            # print(imb_matrix)
+            # print(majority_samples)
+            # print(majority_classes)
+
+            for u in range(self._n_clusters):
+                # print("Cluster", u)
+                for cls in range(self._n_classes):
+                    ir = imb_matrix[cls][u] / majority_samples[u]
+
+                    if cls != majority_classes[u] and cls != majority_class and ir > 0.01:
+                        samples_to_generate = int(majority_samples[u] - imb_matrix[cls][u])
+                        # print("\tI will create", samples_to_generate, "samples from Class", cls)
+
+                        if samples_to_generate > 1:
+                            # Generate the appropriate number of samples to equalize cls with the majority class.
+                            generated_samples = self.sample(num_samples=samples_to_generate, y=cls, u=u)
+                            # print("\t\tCreated", generated_samples.shape[0], "samples")
+                            generated_classes = np.full(generated_samples.shape[0], cls)
+
+                            x_resampled = np.vstack((x_resampled, generated_samples))
+                            y_resampled = np.hstack((y_resampled, generated_classes))
 
         # dictionary mode: the keys correspond to the targeted classes. The values correspond to the desired number of
         # samples for each targeted class.
@@ -610,8 +623,7 @@ class ctdGAN(GANSynthesizer):
                 samples_to_generate = self._sampling_strategy[cls]
 
                 # Generate the appropriate number of samples to equalize cls with the majority class.
-                # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
-                generated_samples = self.sample(samples_to_generate, cls)
+                generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
                 generated_classes = np.full(samples_to_generate, cls)
 
                 x_resampled = np.vstack((x_resampled, generated_samples))
