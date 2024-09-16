@@ -315,15 +315,12 @@ class ctdGAN(GANSynthesizer):
             print("pac error")
             return 0, 0
 
-        # packed_samples = num_samples // self.pac_
-        packed_samples = num_samples
-
         real_data = real_data.to(torch.float).to(self._device)
 
         # DISCRIMINATOR TRAINING
         with torch.no_grad():
             # Take samples from the latent space
-            latent_cont, latent_disc = self.sample_latent_space(packed_samples)
+            latent_cont, latent_disc = self.sample_latent_space(num_samples)
             latent_data = torch.cat((latent_cont, latent_disc), dim=1)
 
         # Pass the latent samples through the Generator and generate fake samples.
@@ -343,7 +340,7 @@ class ctdGAN(GANSynthesizer):
         # GENERATOR TRAINING
         # Sample data from the latent spaces
         with torch.no_grad():
-            latent_cont, latent_disc = self.sample_latent_space(packed_samples)
+            latent_cont, latent_disc = self.sample_latent_space(num_samples)
             latent_data = torch.cat((latent_cont, latent_disc), dim=1)
 
         # Pass the latent data through the Generator to synthesize samples

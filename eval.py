@@ -44,9 +44,11 @@ def test_model(model, dataset, seed):
     epochs = 5
 
     if model == "SBGAN":
-        gan = sbGAN(discriminator=(128, 128), generator=(128, 256, 128), method='knn', pac=1, k=5, random_state=seed)
+        gan = sbGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=10, batch_size=100, epochs=epochs,
+                    method='knn', k=5, random_state=seed)
     elif model == "CGAN":
-        gan = cGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=1, random_state=seed, epochs=epochs)
+        gan = cGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=10, batch_size=30, epochs=epochs,
+                   random_state=seed,)
     elif model == "CTGAN":
         gan = ctGAN(discriminator=(256, 256), generator=(256, 256), pac=10, batch_size=100, epochs=epochs)
     elif model == "CTDGAN":
@@ -61,7 +63,8 @@ def test_model(model, dataset, seed):
         print("No model specified")
         exit()
 
-    balanced_data = gan.fit_resample(x, y, categorical_columns=dataset['categorical_cols'])
+    # balanced_data = gan.fit_resample(x, y, categorical_columns=dataset['categorical_cols'])
+    balanced_data = gan.fit_resample(x, y)
     print("Balanced Data shape:", balanced_data[0].shape)
     # print(balanced_data[0])
     print("Finished in", time.time() - t_s, "sec")
@@ -162,8 +165,6 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                 else:
                     x_balanced, y_balanced = synthesizer.fit_resample(dataset=dataset, training_set_rows=train_idx)
 
-                # print(x_balanced.shape, y_balanced.shape)
-
                 oversampling_duration = time.time() - t_s
 
                 # Normalize data before feeding it to the classifiers
@@ -189,7 +190,7 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                         # Binary classification evaluation
                         if dataset.num_classes < 3:
                             performance = scorers[scorer](y_test, y_predict)
-                        # Mutli-class classification evaluation
+                        # MulTi-class classification evaluation
                         else:
                             metric_arguments = inspect.signature(scorers[scorer]).parameters
                             if 'average' in metric_arguments:
@@ -205,11 +206,11 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                     performance_list.append(lst)
                     dataset_performance_list.append(lst)
 
-            d_drh = ResultHandler("perDataset/Resampling_" + key + "_seed_" + str(random_state),
+            d_drh = ResultHandler("perDataset/adversary_Resampling_" + key + "_seed_" + str(random_state),
                                   dataset_performance_list)
             d_drh.record_results()
 
-    drh = ResultHandler(".`Resampling_seed_" + str(random_state), performance_list)
+    drh = ResultHandler("adversary_Resampling_seed_" + str(random_state), performance_list)
     drh.record_results()
 
     print("\n=================================\n")

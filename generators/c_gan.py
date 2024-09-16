@@ -73,9 +73,8 @@ class cGAN(GANSynthesizer):
         # abort silently and return without updating the model parameters.
         num_samples = real_data.shape[0]
         if num_samples % self.pac_ != 0:
+            print("pac error")
             return 0, 0
-
-        packed_samples = num_samples // self.pac_
 
         # DISCRIMINATOR TRAINING
         # Create fake samples from Generator
@@ -91,13 +90,12 @@ class cGAN(GANSynthesizer):
 
         # 4. The Generator produces fake samples (their labels are 0)
         fake_x = self.G_(latent_data.to(self._device))
-        fake_labels = torch.zeros((packed_samples, 1))
+        fake_labels = torch.zeros((num_samples // self.pac_, 1))
 
         # 5. The real samples (coming from the dataset) with their one-hot-encoded classes are assigned labels eq. to 1.
         real_x = real_data[:, 0:self._input_dim]
         real_y = real_data[:, self._input_dim:(self._input_dim + self._n_classes)]
-        real_labels = torch.ones((packed_samples, 1))
-        # print(real_x.shape, real_y.shape)
+        real_labels = torch.ones((num_samples // self.pac_, 1))
 
         # 6. Mix (concatenate) the fake samples (from Generator) with the real ones (from the dataset).
         all_x = torch.cat((real_x.to(self._device), fake_x))
@@ -105,11 +103,7 @@ class cGAN(GANSynthesizer):
         all_labels = torch.cat((real_labels, fake_labels)).to(self._device)
         all_data = torch.cat((all_x, all_y), dim=1)
 
-        # 7. Reshape the data to feed it to Discriminator (num_samples, dimensionality) -> (-1, pac * dimensionality)
-        # The samples are packed according to self.pac parameter.
-        all_data = all_data.reshape((-1, self.pac_ * (self._input_dim + self._n_classes)))
-
-        # 8. Pass the mixed data to the Discriminator and train the Discriminator (update its weights with backprop).
+        # 7. Pass the mixed data to the Discriminator and train the Discriminator (update its weights with backprop).
         # The loss function quantifies the Discriminator's ability to classify a real/fake sample as real/fake.
         d_predictions = self.D_(all_data)
         disc_loss = loss_function(d_predictions, all_labels)
@@ -127,9 +121,6 @@ class cGAN(GANSynthesizer):
         fake_x = self.G_(latent_data.to(self._device))
 
         all_data = torch.cat((fake_x, latent_y.to(self._device)), dim=1)
-
-        # Reshape the data to feed it to Discriminator ( (num_samples, dimensionality) -> ( -1, pac * dimensionality )
-        all_data = all_data.reshape((-1, self.pac_ * (self._input_dim + self._n_classes)))
 
         d_predictions = self.D_(all_data)
 
@@ -150,15 +141,12 @@ class cGAN(GANSynthesizer):
         """
 
         # Modify the size of the batch to align with self.pac_
-        factor = self._batch_size // self.pac_
-        batch_size = factor * self.pac_
-
         self._transformer = TabularTransformer(cont_normalizer='stds')
         self._transformer.fit(x_train)
         x_train = self._transformer.transform(x_train)
 
         training_data = self.prepare(x_train, y_train)
-        train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
+        train_dataloader = DataLoader(training_data, batch_size=self._batch_size, shuffle=True)
 
         self.D_ = PackedDiscriminator(self.D_Arch_, input_dim=self._input_dim + self._n_classes,
                                       pac=self.pac_).to(self._device)

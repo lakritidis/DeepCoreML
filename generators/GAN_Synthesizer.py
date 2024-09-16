@@ -136,6 +136,12 @@ class GANSynthesizer(BaseSynthesizer):
 
             self._samples_per_class.append(x_class_data)
 
+        dataset_rows = training_data.shape[0]
+        if dataset_rows % self.pac_ != 0:
+            required_samples = self.pac_ * (dataset_rows // self.pac_ + 1) - dataset_rows
+            random_samples = training_data[np.random.randint(0, dataset_rows, (required_samples,))]
+            training_data = np.vstack((training_data, random_samples))
+
         return training_data
 
     def synthesize_dataset(self):
