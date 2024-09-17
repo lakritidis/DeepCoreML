@@ -525,11 +525,6 @@ class ctdGAN(GANSynthesizer):
                         return return_samples
                     reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
                     reconstructed_samples.append(reconstructed_sample)
-
-                # num_generated_samples += 1
-                # reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
-                # reconstructed_samples.append(reconstructed_sample)
-
                 # print("Sample", s, "- Gen:", z, " ===>", reconstructed_sample)
             if num_retries > max_retries:
                 break

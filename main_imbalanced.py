@@ -14,7 +14,7 @@ seed = 1
 
 datasets = {
     # Part 1
-    'ecoli1': {'path': paths.bin_cont + 'ecoli1.csv', 'categorical_cols': (), 'class_col': 7},
+    # 'ecoli1': {'path': paths.bin_cont + 'ecoli1.csv', 'categorical_cols': (), 'class_col': 7},
     # 'ecoli2': {'path': paths.bin_cont + 'ecoli2.csv', 'categorical_cols': (), 'class_col': 7},
     # 'ecoli3': {'path': paths.bin_cont + 'ecoli3.csv', 'categorical_cols': (), 'class_col': 7},
     # 'ecoli4': {'path': paths.bin_cont + 'ecoli4.csv', 'categorical_cols': (), 'class_col': 7},
@@ -39,12 +39,12 @@ datasets = {
     # 'yeast6': {'path': paths.bin_cont + 'yeast6.csv', 'categorical_cols': (), 'class_col': 8},
 
     # Part 2
-    'DryBean': {'path': paths.multi_cont + 'DryBean.csv', 'categorical_cols': (), 'class_col': 16}, # <-- TVAE FAILS
-    'contraceptive': {'path': paths.multi_mix + 'contraceptive.csv', 'categorical_cols': (4, 5, 8), 'class_col': 9},
+    # 'DryBean': {'path': paths.multi_cont + 'DryBean.csv', 'categorical_cols': (), 'class_col': 16}, # <-- TVAE FAILS
     # 'flare': {'path': paths.bin_disc + 'flareF.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
     #            'class_col': 11},  # <-- COPGAN FAILS
     'car-vgood': {'path': paths.bin_disc + 'car-vgood.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5), 'class_col': 6},   # <-- ADASYN FAILS
     'glass': {'path': paths.multi_cont + 'glass.csv', 'categorical_cols': (), 'class_col': 9},   # <-- ADASYN FAILS
+    'contraceptive': {'path': paths.multi_mix + 'contraceptive.csv', 'categorical_cols': (4, 5, 8), 'class_col': 9},
     # 'yeast': {'path': paths.multi_cont + 'yeast.csv', 'categorical_cols': (), 'class_col': 8}, # <-- TVAE & ALL SMOTE FAIL
 
     # 'adult': {'path': paths.bin_mix + 'adult.csv', 'categorical_cols': (1, 3, 5, 6, 7, 8, 9, 13), 'class_col': 14},
@@ -76,11 +76,11 @@ datasets_multiclass = {
     'adult': {'path': paths.bin_disc + 'adult.csv', 'categorical_cols': (1, 3, 5, 6, 7, 8, 9, 13), 'class_col': 14},
 }
 
-eval_methods.test_model('SBGAN', datasets['ecoli1'], seed)
+# eval_methods.test_model('SBGAN', datasets['ecoli1'], seed)
 # eval_methods.test_model('CTDGAN-R', datasets['flare'], seed)
 # eval_methods.test_model('CTDGAN-R', datasets['contraceptive'], seed)
 
-# eval_methods.eval_resampling(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
+eval_methods.eval_resampling(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
 # eval_methods.eval_detectability(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
 
 # eval_methods.eval_ml_efficacy(datasets, num_threads, seed)
