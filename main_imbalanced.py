@@ -10,9 +10,9 @@ num_threads = 1
 os.environ['OMP_NUM_THREADS'] = str(num_threads)
 np.set_printoptions(linewidth=400, threshold=sys.maxsize)
 
-seed = 1
+seed = 42
 
-datasets = {
+keel_datasets = {
     # Part 1
     # 'ecoli1': {'path': paths.bin_cont + 'ecoli1.csv', 'categorical_cols': (), 'class_col': 7},
     # 'ecoli2': {'path': paths.bin_cont + 'ecoli2.csv', 'categorical_cols': (), 'class_col': 7},
@@ -37,20 +37,24 @@ datasets = {
     # 'yeast4': {'path': paths.bin_cont + 'yeast4.csv', 'categorical_cols': (), 'class_col': 8},
     # 'yeast5': {'path': paths.bin_cont + 'yeast5.csv', 'categorical_cols': (), 'class_col': 8},
     # 'yeast6': {'path': paths.bin_cont + 'yeast6.csv', 'categorical_cols': (), 'class_col': 8},
+}
 
+datasets = {
     # Part 2
     # 'DryBean': {'path': paths.multi_cont + 'DryBean.csv', 'categorical_cols': (), 'class_col': 16}, # <-- TVAE FAILS
-    # 'flare': {'path': paths.bin_disc + 'flareF.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+    #'flare': {'path': paths.bin_disc + 'flareF.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
     #            'class_col': 11},  # <-- COPGAN FAILS
-    'car-vgood': {'path': paths.bin_disc + 'car-vgood.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5), 'class_col': 6},   # <-- ADASYN FAILS
-    'glass': {'path': paths.multi_cont + 'glass.csv', 'categorical_cols': (), 'class_col': 9},   # <-- ADASYN FAILS
-    'contraceptive': {'path': paths.multi_mix + 'contraceptive.csv', 'categorical_cols': (4, 5, 8), 'class_col': 9},
+    # 'car-vgood': {'path': paths.bin_disc + 'car-vgood.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5), 'class_col': 6},   # <-- ADASYN FAILS
+    # 'contraceptive': {'path': paths.multi_mix + 'contraceptive.csv', 'categorical_cols': (4, 5, 8), 'class_col': 9},
     # 'yeast': {'path': paths.multi_cont + 'yeast.csv', 'categorical_cols': (), 'class_col': 8}, # <-- TVAE & ALL SMOTE FAIL
 
-    # 'adult': {'path': paths.bin_mix + 'adult.csv', 'categorical_cols': (1, 3, 5, 6, 7, 8, 9, 13), 'class_col': 14},
+
+    # Part 3
     # 'vowel': {'path': paths.bin_mix + 'vowel0.csv', 'categorical_cols': (0, 1, 2), 'class_col': 13},
-    # 'CreditCard': {'path': paths.bin_mix + 'creditcarddefault.csv', 'categorical_cols': (1, 2, 3, 5, 6, 7, 8, 9, 10),
-    #               'class_col': 23},
+    'CreditCard': {'path': paths.bin_mix + 'creditcarddefault.csv', 'categorical_cols': (1, 2, 3, 5, 6, 7, 8, 9, 10),
+                   'class_col': 23},
+    # 'adult': {'path': paths.bin_mix + 'adult.csv', 'categorical_cols': (1, 3, 5, 6, 7, 8, 9, 13), 'class_col': 14},
+
 
     # 'balance': {'path': paths.multi_cont + 'balance.csv', 'categorical_cols': (), 'class_col': 4},  # Errors!
     # 'ecoli': {'path': paths.multi_cont + 'ecoli.csv', 'categorical_cols': (), 'class_col': 7},  # Errors!
