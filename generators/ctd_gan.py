@@ -44,6 +44,7 @@ class ctdGAN(GANSynthesizer):
               * '`stds`'  : Standard scaler
               * '`mms01`' : Min-Max scaler in the range (0,1)
               * '`mms11`' : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
+              * '`yeo`':  Yeo-Johnson Power Transformer
             pac (int): The number of samples to group together as input to the Critic.
             lr (real): The value of the learning rate parameter for the Generator/Critic Adam optimizers.
             decay (real): The value of the weight decay parameter for the Generator/Critic Adam optimizers.
@@ -58,7 +59,7 @@ class ctdGAN(GANSynthesizer):
                          lr, lr, decay, decay, sampling_strategy, random_state)
 
         self._cluster_method = cluster_method
-        if scaler != 'mms11' and scaler != 'mms01' and scaler != 'stds':
+        if scaler != 'mms11' and scaler != 'mms01' and scaler != 'stds' and scaler != 'yeo':
             self._scaler = 'mms11'
         else:
             self._scaler = scaler

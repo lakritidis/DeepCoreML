@@ -325,7 +325,7 @@ class ctGAN(GANSynthesizer):
             warnings.warn(('`epochs` argument in `fit` method has been deprecated and will be removed '
                            'in a future version. Please pass `epochs` to the constructor instead'), DeprecationWarning)
 
-        self._transformer = TabularTransformer(cont_normalizer='gm')
+        self._transformer = TabularTransformer(cont_normalizer='vgm')
         self._transformer.fit(train_data, discrete_columns)
 
         # print(self._transformer._column_transform_info_list)

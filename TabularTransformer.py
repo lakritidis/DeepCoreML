@@ -4,7 +4,7 @@
 import numpy as np
 import pandas as pd
 
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer
 from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
 
@@ -12,6 +12,7 @@ from joblib import Parallel, delayed
 from rdt.transformers import ClusterBasedNormalizer, OneHotEncoder
 
 from collections import namedtuple
+import multiprocessing
 
 SpanInfo = namedtuple('SpanInfo', ['dim', 'activation_fn'])
 ColumnTransformInfo = namedtuple(
@@ -27,7 +28,7 @@ class TabularTransformer(object):
     Model continuous columns with a BayesianGMM and normalized to a scalar [0, 1] and a vector.
     Discrete columns are encoded using a scikit-learn OneHotEncoder.
     """
-    def __init__(self, cont_normalizer='gm', max_clusters=10, weight_threshold=0.005, with_mean=True, with_std=True,
+    def __init__(self, cont_normalizer='none', max_clusters=10, weight_threshold=0.005, with_mean=True, with_std=True,
                  clip=False):
         """Create a data transformer.
 
@@ -35,10 +36,11 @@ class TabularTransformer(object):
             cont_normalizer: Normalizer for the continuous columns:
 
              * 'none': Do not apply a transformation in the continuous columns.
-             * 'gm': Bayesian Gaussian Mixture + One-hot-encoded component labels.
+             * 'vgm': Variational Gaussian Mixture + One-hot-encoded component labels.
              * 'stds': A typical Standard scaler.
-            max_clusters: Max number of Gaussian distributions in Bayesian GMM; used when `cont_normalizer='gm'`
-            weight_threshold: Weight threshold for a Gaussian distribution to be kept; used when `cont_normalizer='gm'`
+             * 'yeo': Yeo-Johnson power transformer.
+            max_clusters: Max number of Gaussian distributions in Bayesian GMM; used when `cont_normalizer='vgm'`
+            weight_threshold: Weight threshold for a Gaussian distribution to be kept; used when `cont_normalizer='vgm'`
             with_mean: If True, it centers the data before scaling. This does not work (and will raise an exception)
                 when attempted on sparse matrices, because centering them entails building a dense matrix which in
                 common use cases is likely to be too large to fit in memory; used when `cont_normalizer='stds'`.
@@ -73,7 +75,7 @@ class TabularTransformer(object):
         min_val = data.min()
 
         cti = None
-        if self._cont_normalizer == 'gm':
+        if self._cont_normalizer == 'vgm':
             tran = ClusterBasedNormalizer(model_missing_values=True, max_clusters=min(len(data), self._max_clusters))
             tran.fit(data, column_name)
             num_components = sum(tran.valid_component_indicator)
@@ -85,6 +87,14 @@ class TabularTransformer(object):
 
         elif self._cont_normalizer == 'stds':
             tran = StandardScaler(with_std=self._with_std, with_mean=self._with_mean)
+            tran.fit(data)
+
+            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
+                                      column_max=max_val, column_min=min_val,
+                                      output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
+
+        elif self._cont_normalizer == 'yeo':
+            tran = PowerTransformer(method='yeo-johnson', standardize=True)
             tran.fit(data)
 
             cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
@@ -167,7 +177,7 @@ class TabularTransformer(object):
 
     def _transform_continuous(self, column_transform_info, data):
         output = None
-        if self._cont_normalizer == 'gm':
+        if self._cont_normalizer == 'vgm':
             column_name = data.columns[0]
             flattened_column = data[column_name].to_numpy().flatten()
             data = data.assign(**{column_name: flattened_column})
@@ -181,7 +191,8 @@ class TabularTransformer(object):
             index = transformed[f'{column_name}.component'].to_numpy().astype(int)
             output[np.arange(index.size), index + 1] = 1.0
 
-        elif self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms' or self._cont_normalizer == 'stds-pca':
+        elif self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms' or self._cont_normalizer == 'stds-pca' \
+                or self._cont_normalizer == 'yeo':
             output = column_transform_info.transform.transform(data)
 
         elif self._cont_normalizer == 'none':
@@ -226,7 +237,8 @@ class TabularTransformer(object):
                 process = delayed(self.transform_discrete)(column_transform_info, data)
             processes.append(process)
 
-        return Parallel(n_jobs=-1)(processes)
+        # return Parallel(n_jobs=-1)(processes)
+        return Parallel(n_jobs=0.5 * multiprocessing.cpu_count())(processes)
 
     def transform(self, raw_data):
         """Take raw data and output a matrix data."""
@@ -246,7 +258,7 @@ class TabularTransformer(object):
         ret_data = None
         encoder = column_transform_info.transform
 
-        if self._cont_normalizer == 'gm':
+        if self._cont_normalizer == 'vgm':
             data = pd.DataFrame(column_data[:, :2], columns=list(encoder.get_output_sdtypes()))
             data[data.columns[1]] = np.argmax(column_data[:, 1:], axis=1)
             if sigmas is not None:
@@ -255,7 +267,8 @@ class TabularTransformer(object):
 
             ret_data = encoder.reverse_transform(data)
 
-        elif self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms' or self._cont_normalizer == 'stds-pca':
+        elif self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms' or self._cont_normalizer == 'stds-pca'\
+                or self._cont_normalizer == 'yeo':
             ret_data = encoder.inverse_transform(column_data)
 
         elif self._cont_normalizer == 'none':

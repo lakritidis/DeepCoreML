@@ -4,10 +4,12 @@ from sklearn.ensemble import IsolationForest
 
 from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.mixture import GaussianMixture
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder, PowerTransformer
 from sklearn.compose import ColumnTransformer
 
 from joblib import Parallel, delayed
+
+import multiprocessing
 
 
 class ctdCluster:
@@ -25,6 +27,7 @@ class ctdCluster:
               * '`stds`'  : Standard scaler
               * '`mms01`' : Min-Max scaler in the range (0,1)
               * '`mms11`' : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
+              * 'yeo': Yeo-Johnson power transformer.
             embedding_dim (int): The dimensionality of the latent space (for the probability distribution)
             continuous_columns (tuple): The continuous columns in the input data
             discrete_columns (tuple): The columns in the input data that contain categorical variables
@@ -53,6 +56,8 @@ class ctdCluster:
                 self._scaler = MinMaxScaler(feature_range=(0, 1))
             elif scaler == 'mms11':
                 self._scaler = MinMaxScaler(feature_range=(-1, 1))
+            elif scaler == 'yeo':
+                self._scaler = PowerTransformer(method='yeo-johnson', standardize=True)
             else:
                 self._scaler = None
         else:
@@ -201,8 +206,8 @@ class ctdClusterer:
             self._cluster_method = 'kmeans'
 
         self._scaler = scaler
-        if scaler not in ['None', 'stds', 'mms01', 'mms11']:
-            self._cluster_method = 'stds'
+        if scaler not in ['None', 'stds', 'mms01', 'mms11', 'yeo']:
+            self._scaler = 'stds'
 
         self._max_clusters = max_clusters
         self._random_state = random_state
@@ -239,21 +244,23 @@ class ctdClusterer:
 
         # Find the optimal number of clusters (best_k).
         # Perform multiple executions and pick the one that produces the minimum scaled inertia.
+        jobs = 0.5 * multiprocessing.cpu_count()
         k_range = range(2, self._max_clusters)
-        scaled_inertia = Parallel(n_jobs=1)(delayed(self._run_clustering)(x_scaled, k) for k in k_range)
-        best_k = 2 + np.argmin(scaled_inertia)
+        scores = Parallel(n_jobs=jobs)(delayed(self._run_clustering)(x_scaled, k) for k in k_range)
+        best = min(scores, key=lambda score_tuple: score_tuple[1])
+        self.num_clusters_ = best[0]
+        best_cov_type = best[2]
 
         # After the optimal number of clusters best_k has been determined, execute one last k-Means with best_k clusters
-        self.num_clusters_ = best_k
         if self._cluster_method == 'hac':
             cluster_method = AgglomerativeClustering(n_clusters=self.num_clusters_)
         elif self._cluster_method == 'kmeans':
             cluster_method = KMeans(n_clusters=self.num_clusters_, n_init='auto', random_state=self._random_state)
         elif self._cluster_method == 'gmm':
-            cluster_method = GaussianMixture(n_components=self.num_clusters_, covariance_type='full',
+            cluster_method = GaussianMixture(n_components=self.num_clusters_, covariance_type=best_cov_type,
                                              random_state=self._random_state)
         else:
-            cluster_method = AgglomerativeClustering(n_clusters=self.num_clusters_)
+            cluster_method = KMeans(n_clusters=self.num_clusters_, n_init='auto', random_state=self._random_state)
 
         self.cluster_labels_ = cluster_method.fit_predict(x_scaled)
 
@@ -269,7 +276,10 @@ class ctdClusterer:
                                  random_state=self._random_state)
             cluster.fit(x_u, y_u, len(self._samples_per_class))
 
+            print(x_u)
             x_transformed = cluster.transform(x_u)
+            print(x_transformed)
+            exit()
             cluster_labels = (u * np.ones(y_u.shape[0])).reshape(-1, 1)
             class_labels = np.array(y_u).reshape(-1, 1)
 
@@ -345,6 +355,7 @@ class ctdClusterer:
         """
 
         ret_val = 0
+        cov_type = 'None'
         inertia_o = np.square((scaled_data - scaled_data.mean(axis=0))).sum()
 
         if self._cluster_method == 'hac':
@@ -363,11 +374,17 @@ class ctdClusterer:
             ret_val = kmeans.inertia_ / inertia_o + alpha_k * num_clusters
 
         elif self._cluster_method == 'gmm':
-            gmm = GaussianMixture(n_components=num_clusters, covariance_type='full', random_state=self._random_state)
-            gmm.fit(scaled_data)
-            ret_val = gmm.bic(scaled_data)
+            min_bic = 10 ** 9
+            for cov in ['spherical', 'tied', 'diag', 'full']:
+                gmm = GaussianMixture(n_components=num_clusters, covariance_type=cov, random_state=self._random_state)
+                gmm.fit(scaled_data)
+                bic_score = gmm.bic(scaled_data)
+                if bic_score < min_bic:
+                    min_bic = bic_score
+                    cov_type = cov
+            ret_val = min_bic
 
-        return ret_val
+        return num_clusters, ret_val, cov_type
 
     def display(self):
         print("Num Clusters: ", self.num_clusters_)
