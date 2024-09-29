@@ -28,17 +28,21 @@ class TabularTransformer(object):
     Model continuous columns with a BayesianGMM and normalized to a scalar [0, 1] and a vector.
     Discrete columns are encoded using a scikit-learn OneHotEncoder.
     """
-    def __init__(self, cont_normalizer='none', max_clusters=10, weight_threshold=0.005, with_mean=True, with_std=True,
+    def __init__(self, cont_normalizer='None', max_clusters=10, weight_threshold=0.005, with_mean=True, with_std=True,
                  clip=False):
         """Create a data transformer.
 
         Args:
             cont_normalizer: Normalizer for the continuous columns:
 
-             * 'none': Do not apply a transformation in the continuous columns.
-             * 'vgm': Variational Gaussian Mixture + One-hot-encoded component labels.
-             * 'stds': A typical Standard scaler.
-             * 'yeo': Yeo-Johnson power transformer.
+              * '`None`'     : No transformation on the continuous columns takes place; the data is considered immutable
+              * '`vgm`'      : Variational Gaussian Mixture + One-hot-encoded component labels.
+              * '`stds`'     : Standard scaler
+              * '`mms01`'    : Min-Max scaler in the range (0,1)
+              * '`mms11`'    : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
+              * '`stds-pca`' : Standard scaler & Principal Component Analysis
+              * '`yeo`'      : Yeo-Johnson power transformer.
+
             max_clusters: Max number of Gaussian distributions in Bayesian GMM; used when `cont_normalizer='vgm'`
             weight_threshold: Weight threshold for a Gaussian distribution to be kept; used when `cont_normalizer='vgm'`
             with_mean: If True, it centers the data before scaling. This does not work (and will raise an exception)
@@ -71,8 +75,8 @@ class TabularTransformer(object):
             namedtuple: A ``ColumnTransformInfo`` object.
         """
         column_name = data.columns[0]
-        max_val = data.max()
-        min_val = data.min()
+        max_val = np.array(data.max(axis=0))[0]
+        min_val = np.array(data.min(axis=0))[0]
 
         cti = None
         if self._cont_normalizer == 'vgm':
@@ -93,8 +97,16 @@ class TabularTransformer(object):
                                       column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
 
-        elif self._cont_normalizer == 'yeo':
-            tran = PowerTransformer(method='yeo-johnson', standardize=True)
+        elif self._cont_normalizer == 'mms01':
+            tran = MinMaxScaler(feature_range=(0, 1))
+            tran.fit(data)
+
+            cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
+                                      column_max=max_val, column_min=min_val,
+                                      output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
+
+        elif self._cont_normalizer == 'mms11':
+            tran = MinMaxScaler(feature_range=(-1, 1))
             tran.fit(data)
 
             cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
@@ -110,15 +122,15 @@ class TabularTransformer(object):
                                       column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
 
-        elif self._cont_normalizer == 'mms':
-            tran = MinMaxScaler(feature_range=(-1, 1))
+        elif self._cont_normalizer == 'yeo':
+            tran = PowerTransformer(method='yeo-johnson', standardize=True)
             tran.fit(data)
 
             cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=tran,
                                       column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
 
-        elif self._cont_normalizer == 'none':
+        elif self._cont_normalizer == 'None':
             cti = ColumnTransformInfo(column_name=column_name, column_type='continuous', transform=None,
                                       column_max=max_val, column_min=min_val,
                                       output_info=[SpanInfo(1, 'tanh')], output_dimensions=1)
@@ -191,11 +203,11 @@ class TabularTransformer(object):
             index = transformed[f'{column_name}.component'].to_numpy().astype(int)
             output[np.arange(index.size), index + 1] = 1.0
 
-        elif self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms' or self._cont_normalizer == 'stds-pca' \
-                or self._cont_normalizer == 'yeo':
+        elif (self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms01' or self._cont_normalizer == 'mms11'
+              or self._cont_normalizer == 'stds-pca' or self._cont_normalizer == 'yeo'):
             output = column_transform_info.transform.transform(data)
 
-        elif self._cont_normalizer == 'none':
+        elif self._cont_normalizer == 'None':
             return data
 
         return output
@@ -267,11 +279,11 @@ class TabularTransformer(object):
 
             ret_data = encoder.reverse_transform(data)
 
-        elif self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms' or self._cont_normalizer == 'stds-pca'\
+        elif self._cont_normalizer == 'stds' or self._cont_normalizer == 'mms11' or self._cont_normalizer == 'stds-pca'\
                 or self._cont_normalizer == 'yeo':
             ret_data = encoder.inverse_transform(column_data)
 
-        elif self._cont_normalizer == 'none':
+        elif self._cont_normalizer == 'None':
             ret_data = column_data
 
         # Apply value clipping here: Given an interval, values outside the interval are clipped to the interval edges.

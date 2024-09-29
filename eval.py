@@ -206,11 +206,11 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                     performance_list.append(lst)
                     dataset_performance_list.append(lst)
 
-            d_drh = ResultHandler("perDataset/yeo_Resampling_" + key + "_seed_" + str(random_state),
+            d_drh = ResultHandler("perDataset/ctd_Resampling_" + key + "_seed_" + str(random_state),
                                   dataset_performance_list)
             d_drh.record_results()
 
-    drh = ResultHandler("yeo_Resampling_seed_" + str(random_state), performance_list)
+    drh = ResultHandler("ctd_Resampling_seed_" + str(random_state), performance_list)
     drh.record_results()
 
     print("\n=================================\n")

@@ -12,12 +12,12 @@ np.set_printoptions(linewidth=400, threshold=sys.maxsize)
 
 seed = 42
 
-keel_datasets = {
+datasets_1 = {
     # Part 1
-    'ecoli1': {'path': paths.bin_cont + 'ecoli1.csv', 'categorical_cols': (), 'class_col': 7},
-    'ecoli2': {'path': paths.bin_cont + 'ecoli2.csv', 'categorical_cols': (), 'class_col': 7},
-    'ecoli3': {'path': paths.bin_cont + 'ecoli3.csv', 'categorical_cols': (), 'class_col': 7},
-    'ecoli4': {'path': paths.bin_cont + 'ecoli4.csv', 'categorical_cols': (), 'class_col': 7},
+    # 'ecoli1': {'path': paths.bin_cont + 'ecoli1.csv', 'categorical_cols': (), 'class_col': 7},
+    # 'ecoli2': {'path': paths.bin_cont + 'ecoli2.csv', 'categorical_cols': (), 'class_col': 7},
+    # 'ecoli3': {'path': paths.bin_cont + 'ecoli3.csv', 'categorical_cols': (), 'class_col': 7},
+    # 'ecoli4': {'path': paths.bin_cont + 'ecoli4.csv', 'categorical_cols': (), 'class_col': 7},
 
     # 'glass1': {'path': paths.bin_cont + 'glass1.csv', 'categorical_cols': (), 'class_col': 9},
     # 'glass2': {'path': paths.bin_cont + 'glass2.csv', 'categorical_cols': (), 'class_col': 9},
@@ -37,61 +37,60 @@ keel_datasets = {
     # 'yeast4': {'path': paths.bin_cont + 'yeast4.csv', 'categorical_cols': (), 'class_col': 8},
     # 'yeast5': {'path': paths.bin_cont + 'yeast5.csv', 'categorical_cols': (), 'class_col': 8},
     # 'yeast6': {'path': paths.bin_cont + 'yeast6.csv', 'categorical_cols': (), 'class_col': 8},
-}
 
-datasets = {
     # Part 2
     # 'DryBean': {'path': paths.multi_cont + 'DryBean.csv', 'categorical_cols': (),
     #            'class_col': 16}, # <-- TVAE FAILS
     # 'flare': {'path': paths.bin_disc + 'flareF.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-    #           'class_col': 11},  # <-- COPGAN FAILS
+    #          'class_col': 11},  # <-- COPGAN FAILS
     # 'car-vgood': {'path': paths.bin_disc + 'car-vgood.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5),
-    #               'class_col': 6},   # <-- ADASYN FAILS
+    #              'class_col': 6},   # <-- ADASYN FAILS
     # 'contraceptive': {'path': paths.multi_mix + 'contraceptive.csv', 'categorical_cols': (4, 5, 8),
     #                  'class_col': 9},
     # 'yeast': {'path': paths.multi_cont + 'yeast.csv', 'categorical_cols': (),
     #          'class_col': 8}, # <-- TVAE & ALL SMOTE FAIL
-
-
-    # Part 3
-    'vowel': {'path': paths.bin_mix + 'vowel0.csv', 'categorical_cols': (0, 1, 2), 'class_col': 13},
     # 'CreditCard': {'path': paths.bin_mix + 'creditcarddefault.csv', 'categorical_cols': (1, 2, 3, 5, 6, 7, 8, 9, 10),
     #                'class_col': 23},
-    # 'adult': {'path': paths.bin_mix + 'adult.csv', 'categorical_cols': (1, 3, 5, 6, 7, 8, 9, 13), 'class_col': 14},
-
-
-    # 'balance': {'path': paths.multi_cont + 'balance.csv', 'categorical_cols': (), 'class_col': 4},  # Errors!
-    # 'ecoli': {'path': paths.multi_cont + 'ecoli.csv', 'categorical_cols': (), 'class_col': 7},  # Errors!
-
-    # 'hayes-roth': {'path': paths.multi_cont + 'hayes-roth.csv', 'categorical_cols': (), 'class_col': 4},  # <--Errors
+    # 'vowel': {'path': paths.bin_mix + 'vowel0.csv', 'categorical_cols': (0, 1, 2), 'class_col': 13},
+    # 'MobilePrice': {'path': paths.multi_cont + 'MobilePrice.csv', 'categorical_cols': (1, 3, 5, 17, 18, 19),
+    #                'class_col': 20},
     # 'new-thyroid': {'path': paths.multi_cont + 'new-thyroid.csv', 'categorical_cols': (), 'class_col': 5},
+    # 'thyroid': {'path': paths.multi_cont + 'thyroid.csv', 'categorical_cols': (), 'class_col': 21},  # <-- TVAE FAILS
+    # 'anemia': {'path': paths.multi_cont + 'anemia.csv', 'categorical_cols': (), 'class_col': 14},
+    # 'heart': {'path': paths.bin_mix + 'heart.csv', 'categorical_cols': (1, 2, 6, 8, 10, 12), 'class_col': 13},
+    # 'FetalHealth': {'path': paths.multi_mix + 'fetal_health.csv', 'categorical_cols': (20,), 'class_col': 21},
+
+    # 'Churn': {'path': paths.bin_mix + 'Churn_Modelling.csv', 'categorical_cols': (1, 2, 7, 8), 'class_col': 10},
+    'adult': {'path': paths.bin_mix + 'adult.csv', 'categorical_cols': (1, 3, 5, 6, 7, 8, 9, 13), 'class_col': 14},
+    'EyeState': {'path': paths.bin_cont + 'EEG_Eye_State.csv', 'categorical_cols': (), 'class_col': 14},
+    'nursery': {'path': paths.multi_disc + 'nursery.csv', 'categorical_cols': (0, 1, 2, 3, 4, 5, 6, 7), 'class_col': 8},
+    'obesity': {'path': paths.multi_mix + 'obesity.csv', 'categorical_cols': (0, 4, 5, 6, 8, 9, 11, 14, 15), 'class_col': 16},
+}
+
+datasets_problematic = {
+    # Problematic Dat
+    # 'hayes-roth': {'path': paths.multi_cont + 'hayes-roth.csv', 'categorical_cols': (), 'class_col': 4},  # <--Errors
     # 'pageblocks': {'path': paths.multi_cont + 'pageblocks.csv', 'categorical_cols': (), 'class_col': 10},  # <--Errors
     # 'penbased': {'path': paths.multi_cont + 'penbased.csv', 'categorical_cols': (), 'class_col': 16},  # <--Errors
     # 'shuttle': {'path': paths.multi_cont + 'shuttle-rev.csv', 'categorical_cols': (), 'class_col': 9},
-    # 'thyroid': {'path': paths.multi_cont + 'thyroid.csv', 'categorical_cols': (), 'class_col': 21},  # <-- TVAE FAILS
-
-    # 'MobilePrice': {'path': paths.multi_cont + 'MobilePrice.csv', 'categorical_cols': (1, 3, 5, 17, 18, 19),
-    #                'class_col': 20},
     # 'autos': {'path': paths.multi_mix + 'autos.csv', 'categorical_cols': (1, 2, 3, 4, 5, 6, 7, 13, 14, 16),
     #          'class_col': 25},  # <--Errors
+    # 'balance': {'path': paths.multi_cont + 'balance.csv', 'categorical_cols': (), 'class_col': 4},  # Errors!
+    # 'BrainStroke': {'path': paths.bin_mix + 'brain_stroke.csv', 'categorical_cols': (0, 2, 3, 4, 5, 6, 9),
+    #                 'class_col': 10}, # <-- VERY LOW F1, COP-GAN FAILS
+    # 'LoanModeling': {'path': paths.bin_mix + 'LoanModeling.csv', 'categorical_cols': (5, 7, 8, 9, 10),
+    #                  'class_col': 11},  # <-- LOW F1, TVAE FAILS
 }
 
-####################################################################
+if __name__ == '__main__':
+    # eval_methods.test_model('SBGAN', datasets['ecoli1'], seed)
+    # eval_methods.test_model('CTDGAN-R', datasets['flare'], seed)
+    # eval_methods.test_model('CTDGAN-R', datasets['contraceptive'], seed)
 
-datasets_multiclass = {
-    # 'MagicGammaTelescope': {'path': st_path + 'magic_gamma_telescope.csv', 'categorical_cols': (), 'class_col': 10},
-    # 'DryBean': {'path': st_path + 'Dry_Bean_Dataset.csv', 'categorical_cols': (), 'class_col': 16},
-    'adult': {'path': paths.bin_disc + 'adult.csv', 'categorical_cols': (1, 3, 5, 6, 7, 8, 9, 13), 'class_col': 14},
-}
+    eval_methods.eval_resampling(datasets=datasets_1, transformer='standardizer', num_folds=5, random_state=seed)
+    # eval_methods.eval_detectability(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
 
-# eval_methods.test_model('SBGAN', datasets['ecoli1'], seed)
-# eval_methods.test_model('CTDGAN-R', datasets['flare'], seed)
-# eval_methods.test_model('CTDGAN-R', datasets['contraceptive'], seed)
+    # eval_methods.eval_ml_efficacy(datasets, num_threads, seed)
 
-eval_methods.eval_resampling(datasets=keel_datasets, transformer='standardizer', num_folds=5, random_state=seed)
-# eval_methods.eval_detectability(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
-
-# eval_methods.eval_ml_efficacy(datasets, num_threads, seed)
-
-# Experiments performed in Information Sciences 2024 paper
-# eval_methods.eval_oversampling_efficacy(datasets_imb, num_threads, seed)
+    # Experiments performed in Information Sciences 2024 paper
+    # eval_methods.eval_oversampling_efficacy(datasets_imb, num_threads, seed)

@@ -39,7 +39,7 @@ class BaseResampler:
         y_train = dataset.y_[training_set_rows]
 
         # OneHot encode the categorical variables
-        table_transformer = TabularTransformer(cont_normalizer='none', clip=False)
+        table_transformer = TabularTransformer(cont_normalizer='None', clip=False)
         table_transformer.fit(x_train, dataset.categorical_columns)
         x_transformed = table_transformer.transform(x_train)
 
@@ -155,7 +155,7 @@ class TestSynthesizers:
         knn = 10
         rad = 1
         epochs = 300
-        batch_size = 30
+        batch_size = 100
         max_clusters = 20
 
         # Prepare the column descriptors for the SDV models
@@ -303,28 +303,23 @@ class TestSynthesizers:
             # SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
             # SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
             # SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
+
             # CTResampler("ctGAN", model=ctgan_1, random_state=random_state),
 
-            # CTResampler("pac1_kmn_mms", model=pac1_kmn_mms_probs, random_state=random_state),
-            # CTResampler("pac1_hac_mms", model=pac1_hac_mms_probs, random_state=random_state),
-            # CTResampler("pac1_kmn_std", model=pac1_kmn_stds_probs, random_state=random_state),
-            # CTResampler("pac1_hac_std", model=pac1_hac_stds_probs, random_state=random_state),
-            CTResampler("pac1_gmm_yeo", model=pac1_gmm_yeo_probs, random_state=random_state),
-            # CTResampler("pac10_kmn_mms", model=pac10_kmn_mms_probs, random_state=random_state),
-            # CTResampler("pac10_hac_mms", model=pac10_hac_mms_probs, random_state=random_state),
-            # CTResampler("pac10_kmn_std", model=pac10_kmn_stds_probs, random_state=random_state),
-            # CTResampler("pac10_hac_std", model=pac10_hac_stds_probs, random_state=random_state),
-            CTResampler("pac10_gmm_yeo", model=pac10_gmm_yeo_probs, random_state=random_state),
-
-            # CTResampler("pac1_gmm_mms_probs", model=pac1_gmm_mms_probs, random_state=random_state),
-            # CTResampler("pac1_gmm_stds_probs", model=pac1_gmm_stds_probs, random_state=random_state),
-            # CTResampler("pac10_gmm_mms_probs", model=pac10_gmm_mms_probs, random_state=random_state),
-            # CTResampler("pac10_gmm_stds_probs", model=pac10_gmm_stds_probs, random_state=random_state),
-
+            # CTResampler("pac1_kmn_stds_probs", model=pac1_kmn_stds_probs, random_state=random_state),
+            # CTResampler("pac1_hac_stds_probs", model=pac1_hac_stds_probs, random_state=random_state),
+            # CTResampler("pac1_kmn_mms_probs", model=pac1_kmn_mms_probs, random_state=random_state),
+            # CTResampler("pac1_hac_mms_probs", model=pac1_hac_mms_probs, random_state=random_state),
+            CTResampler("pac10_kmn_stds_probs", model=pac10_kmn_stds_probs, random_state=random_state),
+            # CTResampler("pac10_hac_stds_probs", model=pac10_hac_stds_probs, random_state=random_state),
+            CTResampler("pac10_kmn_mms_probs", model=pac10_kmn_mms_probs, random_state=random_state),
+            # CTResampler("pac10_hac_mms_probs", model=pac10_hac_mms_probs, random_state=random_state),
         )
+
         self.over_samplers_sdv_ = (
             SDVResampler(name="CTGAN", model=ctgan, random_state=random_state),
             SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
+            SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
             SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
         )
 

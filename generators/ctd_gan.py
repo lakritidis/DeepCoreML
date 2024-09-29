@@ -148,6 +148,7 @@ class ctdGAN(GANSynthesizer):
                                                    embedding_dim=self.embedding_dim_, random_state=self._random_state)
 
         train_data = self._clustered_transformer.perform_clustering(x_train, y_train, self._n_classes, self.pac_)
+
         self._n_clusters = self._clustered_transformer.num_clusters_
 
         # ====== Append the cluster and class labels to the collection of discrete columns
@@ -155,7 +156,7 @@ class ctdGAN(GANSynthesizer):
         self._categorical_columns.append(self._input_dim + 1)
 
         # ====== Transform the discrete columns only; the continuous columns have been scaled at cluster-level.
-        self._discrete_transformer = TabularTransformer(cont_normalizer='none', clip=False)
+        self._discrete_transformer = TabularTransformer(cont_normalizer='None', clip=False)
         self._discrete_transformer.fit(train_data, self._categorical_columns)
 
         ret_data = self._discrete_transformer.transform(train_data)
@@ -496,7 +497,6 @@ class ctdGAN(GANSynthesizer):
 
             # Create the discrete and continuous tensors.
             latent_disc_ohe = torch.tensor(np.hstack(latent_disc_ohe))
-            # latent_cont = torch.tensor(np.vstack(latent_cont))
 
             mean = torch.zeros(num_samples, self.embedding_dim_)
             std = mean + 1
@@ -508,9 +508,10 @@ class ctdGAN(GANSynthesizer):
             # Generate samples by passing the latent data to Generator
             generated_data = self._apply_activate(self.G_(latent_data)).cpu().detach().numpy()
             generated_samples = self._discrete_transformer.inverse_transform(generated_data)
-            # print(latent_classes)
-            # print("Latent:", latent_data)
-            # print(generated_samples)
+            # print("\n\nLatent Classes:\n", latent_classes)
+            # print("\n\nLatent Data:\n", latent_data)
+            # print("\n\nGenerated Data:\n", generated_data)
+            # print("\n\nGenerated Samples:\n", generated_samples)
 
             # Reverse the transformation of the generated samples. First inverse the transformation of the
             # continuous variables that have been encoded according to the cluster the sample belongs.
