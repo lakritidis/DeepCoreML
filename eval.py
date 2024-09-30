@@ -41,7 +41,7 @@ def test_model(model, dataset, seed):
 
     t_s = time.time()
 
-    epochs = 5
+    epochs = 300
 
     if model == "SBGAN":
         gan = sbGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=10, batch_size=100, epochs=epochs,
@@ -104,7 +104,6 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
     }
 
     n_dataset, n_fold = 0, 0
-    performance_list = []
 
     # For each dataset
     for key in datasets.keys():
@@ -118,8 +117,9 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
         dataset = TabularDataset(key, class_column=ds['class_col'], categorical_columns=ds['categorical_cols'],
                                  random_state=random_state)
         dataset.load_from_csv(path=ds['path'])
+        performance_list = []
 
-        print("\n=================================\n Evaluating dataset", key, " - shape:", dataset.x_.shape)
+        print("\n=======================\n Resampling Test - Evaluating dataset", key, " - shape:", dataset.x_.shape)
 
         # A SingleTableMetadata() object is required by the SDV models
         metadata = SingleTableMetadata()
@@ -138,7 +138,6 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
         n_fold = 0
 
         # For each fold
-        dataset_performance_list = []
         for train_idx, test_idx in skf.split(dataset.x_, dataset.y_):
             n_fold += 1
             print("\tFold: ", n_fold)
@@ -163,7 +162,8 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                     x_balanced = dataset.x_[train_idx]
                     y_balanced = dataset.y_[train_idx]
                 else:
-                    x_balanced, y_balanced = synthesizer.fit_resample(dataset=dataset, training_set_rows=train_idx)
+                    x_balanced, y_balanced = synthesizer.fit_resample(dataset=dataset, training_set_rows=train_idx,
+                                                                      sampling_strategy='auto')
 
                 oversampling_duration = time.time() - t_s
 
@@ -200,27 +200,21 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
 
                         lst = [key, n_fold, synthesizer.name_, classifier.name_, scorer, performance]
                         performance_list.append(lst)
-                        dataset_performance_list.append(lst)
 
                     lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                     performance_list.append(lst)
-                    dataset_performance_list.append(lst)
 
-            d_drh = ResultHandler("perDataset/ctd_Resampling_" + key + "_seed_" + str(random_state),
-                                  dataset_performance_list)
+            d_drh = ResultHandler("Resampling/ctd_Resampling_" + key + "_seed_" + str(random_state), performance_list)
             d_drh.record_results()
-
-    drh = ResultHandler("ctd_Resampling_seed_" + str(random_state), performance_list)
-    drh.record_results()
 
     print("\n=================================\n")
 
 
 # To evaluate how hard it is to distinguish between real and synthetic instances, we:
-# 1. Create a synthetic dataset with the same number of samples and class distribution as the original one. We
-#    mark the synthetic samples with flag 0.
+# 1. Create a synthetic dataset with the same number of samples and class distribution as the original one.
+#    We mark the synthetic samples with flag 0.
 # 2. We mark the original samples with flag 1.
-# 3. Merge and shuffle the datasets -> create a new dataset
+# 3. Merge and shuffle the datasets -> create a new dataset.
 # 4. Train a classifier on the new dataset and try to predict the flag. The easier it is to predict the flag, the
 #    more distinguishable between real and synthetic data.
 def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
@@ -253,8 +247,6 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
     }
 
     n_dataset, n_fold = 0, 0
-    performance_list = []
-    dataset_performance_list = []
 
     # For each dataset
     for key in datasets.keys():
@@ -265,19 +257,23 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
 
         # Load the dataset from the input CSV file
         ds = datasets[key]
-        dataset = TabularDataset(key, random_state=random_state)
+        dataset = TabularDataset(key, class_column=ds['class_col'], categorical_columns=ds['categorical_cols'],
+                                 random_state=random_state)
         dataset.load_from_csv(path=ds['path'])
+        performance_list = []
 
-        print("\n=================================\n Evaluating dataset", key, " - shape:", dataset.x_.shape)
+        print("\n=======================\n Detectability Test - Evaluating dataset", key, " - shape:", dataset.x_.shape)
 
-        # Convert all columns to numerical
+        # A SingleTableMetadata() object is required by the SDV models
         metadata = SingleTableMetadata()
         metadata.detect_from_dataframe(dataset.df_)
         k = list(metadata.columns.keys())[len(metadata.columns.keys()) - 1]
         for k in metadata.columns.keys():
-            metadata.columns[k] = {'sdtype': 'numerical'}
-
-        # The last column becomes categorical - This structure is required by the Synth. Data Vault models.
+            if k in dataset.categorical_columns:
+                metadata.columns[k] = {'sdtype': 'categorical'}
+            else:
+                metadata.columns[k] = {'sdtype': 'numerical'}
+        # The last column becomes categorical - This structure is required by the SDV models.
         metadata.columns[k] = {'sdtype': 'categorical'}
 
         # Find the class distribution of the dataset and store it into a dictionary. Then pass the dictionary
@@ -286,6 +282,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
         res_dict = dict(zip(unique, 2 * counts))
         synthesizers = TestSynthesizers(metadata, sampling_strategy=res_dict, random_state=random_state)
 
+        # Label the real data with '1'
         real_labels = np.ones(dataset.num_rows)
 
         # For each sampler
@@ -301,12 +298,15 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
                 t_s = time.time()
 
                 # Generate synthetic data with the sampler
-                x_resampled, y_resampled = synthesizer.fit_resample(dataset=dataset, training_set_rows=all_train_idx)
+                x_resampled, y_resampled = synthesizer.fit_resample(dataset=dataset, training_set_rows=all_train_idx,
+                                                                    sampling_strategy=res_dict)
 
                 # Although we require from the oversampling method to generate an equal number of samples as those
                 # included in the original dataset, several of them (e.g. K-Means SMOTE) may return more. So we
                 # must create as many fake labels as the number of generated samples.
                 num_generated_samples = y_resampled.shape[0] - dataset.num_rows
+
+                # Label the fake data with '0'
                 fake_labels = np.zeros(num_generated_samples)
                 real_fake_labels = np.concatenate((real_labels, fake_labels), axis=0)
 
@@ -349,18 +349,12 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
 
                             lst = [key, n_fold, synthesizer.name_, classifier.name_, scorer, performance]
                             performance_list.append(lst)
-                            dataset_performance_list.append(lst)
 
                         lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                         performance_list.append(lst)
-                        dataset_performance_list.append(lst)
 
-            d_drh = ResultHandler("perDataset/Detectability_" + key + "_seed_" + str(random_state),
-                                  dataset_performance_list)
+            d_drh = ResultHandler("Detectability/Detectability_" + key + "_seed_" + str(random_state), performance_list)
             d_drh.record_results()
-
-    drh = ResultHandler("Detectability_ALL_seed_" + str(random_state), performance_list)
-    drh.record_results()
 
     print("\n=================================\n")
 

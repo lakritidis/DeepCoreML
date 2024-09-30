@@ -97,7 +97,7 @@ class GANSynthesizer(BaseSynthesizer):
 
         # plot = df.plot(x="Iteration", y=["Discriminator Loss", "Generator Loss"], ylim=(0, 1))
         plot = df_mean.plot(x='Epoch', y=['Critic Loss', 'Generator Loss'], kind='line', color=colors,
-                            xlabel='Epoch', ylabel='Loss', title="ecoli3")
+                            xlabel='Epoch', ylabel='Loss', title="Dry Bean")
 
         fig = plot.get_figure()
         # fig.savefig(store_losses + 'GAN_losses.png')
