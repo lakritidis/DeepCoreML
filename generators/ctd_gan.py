@@ -192,7 +192,7 @@ class ctdGAN(GANSynthesizer):
 
         latent_disc = torch.hstack(latent_disc).to(self._device)
 
-        # === Continuous variables - Sample from the corresponding Normal distribution of each cluster.
+        # === Continuous variables - Sample from Normal distribution.
         mean = torch.zeros(num_samples, self.embedding_dim_)
         std = mean + 1
         latent_cont = torch.normal(mean=mean, std=std).to(self._device)
@@ -624,11 +624,13 @@ class ctdGAN(GANSynthesizer):
         # samples for each targeted class.
         elif isinstance(self._sampling_strategy, dict):
             for cls in self._sampling_strategy:
-                samples_to_generate = self._sampling_strategy[cls]
+                # In imblearn sampling strategy stores the class distribution of the output dataset. So we have to
+                # create the half number of samples, and we divide by 2.
+                samples_to_generate = int(self._sampling_strategy[cls] / 2)
 
                 # Generate the appropriate number of samples to equalize cls with the majority class.
                 generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
-                generated_classes = np.full(samples_to_generate, cls)
+                generated_classes = np.full(generated_samples.shape[0], cls)
 
                 x_resampled = np.vstack((x_resampled, generated_samples))
                 y_resampled = np.hstack((y_resampled, generated_classes))

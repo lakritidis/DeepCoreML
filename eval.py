@@ -2,11 +2,13 @@ import numpy as np
 import time
 import inspect
 
+import pandas as pd
+
 from generators.sb_gan import sbGAN
 from generators.c_gan import cGAN
 from generators.ct_gan import ctGAN
-
 from generators.ctd_gan import ctdGAN
+from generators.ctabgan_synthesizer import CTABGANSynthesizer
 
 from TabularDataset import TabularDataset
 from Resamplers import TestSynthesizers
@@ -41,7 +43,7 @@ def test_model(model, dataset, seed):
 
     t_s = time.time()
 
-    epochs = 300
+    epochs = 10
 
     if model == "SBGAN":
         gan = sbGAN(discriminator=(128, 128), generator=(128, 256, 128), pac=10, batch_size=100, epochs=epochs,
@@ -54,6 +56,8 @@ def test_model(model, dataset, seed):
     elif model == "CTDGAN":
         gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=10, max_clusters=20, epochs=epochs,
                      batch_size=128, scaler='mms11', cluster_method='kmeans', embedding_dim=128, random_state=seed)
+    elif model == "CTABGAN+":
+        gan = CTABGANSynthesizer(epochs=epochs, random_dim=128, batch_size=128, random_state=seed)
     elif model == "CTDGAN-R":
         gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), pac=10, max_clusters=20, epochs=epochs,
                      batch_size=30, scaler='stds', cluster_method='gmm', embedding_dim=128, random_state=seed,
@@ -63,8 +67,9 @@ def test_model(model, dataset, seed):
         print("No model specified")
         exit()
 
+    gan.fit_resample(dset.df_, categorical=dataset['categorical_cols'])
     # balanced_data = gan.fit_resample(x, y, categorical_columns=dataset['categorical_cols'])
-    balanced_data = gan.fit_resample(x, y)
+    # balanced_data = gan.fit_resample(x, y)
     print("Balanced Data shape:", balanced_data[0].shape)
     # print(balanced_data[0])
     print("Finished in", time.time() - t_s, "sec")
@@ -114,12 +119,14 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
 
         # Load the dataset from the input CSV file
         ds = datasets[key]
+
         dataset = TabularDataset(key, class_column=ds['class_col'], categorical_columns=ds['categorical_cols'],
                                  random_state=random_state)
         dataset.load_from_csv(path=ds['path'])
         performance_list = []
 
-        print("\n=======================\n Resampling Test - Evaluating dataset", key, " - shape:", dataset.x_.shape)
+        print("\n=======================\n Resampling Test - Evaluating dataset", key)
+        dataset.display_params()
 
         # A SingleTableMetadata() object is required by the SDV models
         metadata = SingleTableMetadata()
@@ -204,8 +211,8 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                     lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                     performance_list.append(lst)
 
-            d_drh = ResultHandler("Resampling/ctd_Resampling_" + key + "_seed_" + str(random_state), performance_list)
-            d_drh.record_results()
+        d_drh = ResultHandler("Resampling/ctabgan_Resampling_" + key + "_seed_" + str(random_state), performance_list)
+        d_drh.record_results()
 
     print("\n=================================\n")
 
@@ -262,7 +269,8 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
         dataset.load_from_csv(path=ds['path'])
         performance_list = []
 
-        print("\n=======================\n Detectability Test - Evaluating dataset", key, " - shape:", dataset.x_.shape)
+        print("\n=======================\n Detectability Test - Evaluating dataset", key)
+        dataset.display_params()
 
         # A SingleTableMetadata() object is required by the SDV models
         metadata = SingleTableMetadata()
@@ -353,8 +361,8 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
                         lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                         performance_list.append(lst)
 
-            d_drh = ResultHandler("Detectability/Detectability_" + key + "_seed_" + str(random_state), performance_list)
-            d_drh.record_results()
+        d_drh = ResultHandler("Detectability/Detectability_" + key + "_seed_" + str(random_state), performance_list)
+        d_drh.record_results()
 
     print("\n=================================\n")
 

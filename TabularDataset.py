@@ -165,9 +165,9 @@ class TabularDataset(Dataset):
         self.num_classes = len(self.df_.iloc[:, self.class_column].unique())
         self.dimensionality = self.x_.shape[1]
 
-        print("Num Samples:", self.num_rows, "\nClass Distribution:")
-        for k in range(self.num_classes):
-            print("\tClass", k, ":", len(self.y_[self.y_ == k]), "samples")
+        # print("Num Samples:", self.num_rows, "\nClass Distribution:")
+        # for k in range(self.num_classes):
+        #    print("\tClass", k, ":", len(self.y_[self.y_ == k]), "samples")
 
     # Get dummies - onehot encode the categorical columns
     def get_dummies(self):
@@ -183,7 +183,7 @@ class TabularDataset(Dataset):
         Display the basic dataset parameters.
         """
         print("Num Rows:", self.num_rows, ", Num Columns:", self.num_columns)
-        print("\nEncoded data Dimensions:", self.dimensionality)
+        print("Encoded data Dimensions:", self.dimensionality)
         print("Classes:", self.num_classes, "- Class Distribution:")
         for k in range(self.num_classes):
             print("\tClass", k, ":", len(self.y_[self.y_ == k]), "samples")

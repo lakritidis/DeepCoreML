@@ -358,7 +358,9 @@ class cGAN(GANSynthesizer):
         # samples for each targeted class.
         elif isinstance(self._sampling_strategy, dict):
             for cls in self._sampling_strategy:
-                samples_to_generate = self._sampling_strategy[cls]
+                # In imblearn sampling strategy stores the class distribution of the output dataset. So we have to
+                # create the half number of samples, and we divide by 2.
+                samples_to_generate = int(self._sampling_strategy[cls] / 2)
 
                 # Generate the appropriate number of samples to equalize cls with the majority class.
                 # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])

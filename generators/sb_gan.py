@@ -282,6 +282,7 @@ class sbGAN(GANSynthesizer):
             latent_classes = torch.from_numpy(np.random.randint(0, self._n_classes, num_samples)).to(torch.int64)
             latent_y = nn.functional.one_hot(latent_classes, num_classes=self._n_classes)
         else:
+            # print("requested class:", y, "Num samples:", num_samples, "Num classes:", self._n_classes)
             latent_y = nn.functional.one_hot(torch.full(size=(num_samples,), fill_value=y), num_classes=self._n_classes)
 
         latent_x = torch.randn((num_samples, self.embedding_dim_))
@@ -349,7 +350,9 @@ class sbGAN(GANSynthesizer):
         # samples for each targeted class.
         elif isinstance(self._sampling_strategy, dict):
             for cls in self._sampling_strategy:
-                samples_to_generate = self._sampling_strategy[cls]
+                # In imblearn sampling strategy stores the class distribution of the output dataset. So we have to
+                # create the half number of samples, and we divide by 2.
+                samples_to_generate = int(self._sampling_strategy[cls] / 2)
 
                 # Generate the appropriate number of samples to equalize cls with the majority class.
                 # print("\tSampling Class y:", cls, " Gen Samples ratio:", gen_samples_ratio[cls])
