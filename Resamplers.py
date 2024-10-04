@@ -110,7 +110,7 @@ class SDVResampler(BaseResampler):
                     reference_data = pd.DataFrame(data={str(dataset.class_column): [cls] * samples_to_generate})
                     generated_samples = self._model.sample_remaining_columns(
                         max_tries_per_batch=500, known_columns=reference_data).iloc[:, 0:dataset.dimensionality]
-                    if generated_samples is not None:
+                    if generated_samples is not None and generated_samples.shape[0] > 0:
                         # print(generated_samples.shape)
                         generated_classes = np.full(generated_samples.shape[0], cls)
 
@@ -129,7 +129,7 @@ class SDVResampler(BaseResampler):
                 generated_samples = self._model.sample_remaining_columns(
                     max_tries_per_batch=500, known_columns=reference_data).iloc[:, 0:dataset.dimensionality]
 
-                if generated_samples is not None:
+                if generated_samples is not None and generated_samples.shape[0] > 0:
                     # print(generated_samples.shape)
                     generated_classes = np.full(samples_to_generate, cls)
 

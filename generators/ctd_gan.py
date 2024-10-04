@@ -614,11 +614,13 @@ class ctdGAN(GANSynthesizer):
                         if samples_to_generate > 1:
                             # Generate the appropriate number of samples to equalize cls with the majority class.
                             generated_samples = self.sample(num_samples=samples_to_generate, y=cls, u=u)
-                            # print("\t\tCreated", generated_samples.shape[0], "samples")
-                            generated_classes = np.full(generated_samples.shape[0], cls)
 
-                            x_resampled = np.vstack((x_resampled, generated_samples))
-                            y_resampled = np.hstack((y_resampled, generated_classes))
+                            if generated_samples is not None and generated_samples.shape[0] > 0:
+                                # print("\t\tCreated", generated_samples.shape[0], "samples")
+                                generated_classes = np.full(generated_samples.shape[0], cls)
+
+                                x_resampled = np.vstack((x_resampled, generated_samples))
+                                y_resampled = np.hstack((y_resampled, generated_classes))
 
         # dictionary mode: the keys correspond to the targeted classes. The values correspond to the desired number of
         # samples for each targeted class.
@@ -630,9 +632,12 @@ class ctdGAN(GANSynthesizer):
 
                 # Generate the appropriate number of samples to equalize cls with the majority class.
                 generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
-                generated_classes = np.full(generated_samples.shape[0], cls)
 
-                x_resampled = np.vstack((x_resampled, generated_samples))
-                y_resampled = np.hstack((y_resampled, generated_classes))
+                if generated_samples is not None and generated_samples.shape[0] > 0:
+                    # print("\t\tCreated", generated_samples.shape[0], "samples")
+                    generated_classes = np.full(generated_samples.shape[0], cls)
+
+                    x_resampled = np.vstack((x_resampled, generated_samples))
+                    y_resampled = np.hstack((y_resampled, generated_classes))
 
         return x_resampled, y_resampled

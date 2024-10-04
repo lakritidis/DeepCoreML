@@ -211,8 +211,9 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                     lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                     performance_list.append(lst)
 
-        d_drh = ResultHandler("Resampling/ctabgan_Resampling_" + key + "_seed_" + str(random_state), performance_list)
-        d_drh.record_results()
+            d_drh = ResultHandler("Resampling/ctabgan_Resampling_" + key + "_seed_" + str(random_state),
+                                  performance_list)
+            d_drh.record_results()
 
     print("\n=================================\n")
 

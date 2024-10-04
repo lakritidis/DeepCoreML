@@ -572,7 +572,13 @@ class CTABGANSynthesizer:
         data = np.concatenate(data, axis=0)
         result, resample = self.transformer.inverse_transform(data)
 
+        retries = 10
+        n_retry = 0
         while len(result) < n:
+            n_retry += 1
+            if n_retry < retries:
+                break
+
             data_resample = []    
             steps_left = resample // self.batch_size + 1
 
@@ -609,6 +615,7 @@ class CTABGANSynthesizer:
         while num_samples < requested_samples:
             generated_data = self.sample(requested_samples)
             num_retries += 1
+
             if num_retries > max_tries_per_batch:
                 ret_samples = np.array(generated_samples)
                 print("\t\tIncompletely created ", ret_samples.shape[0], "for class")
@@ -623,6 +630,6 @@ class CTABGANSynthesizer:
                         generated_samples.append(generated_data[i, :])
                         num_samples += 1
 
-        ret_samples = np.array(generated_samples)
+        ret_samples = np.array(generated_samples)[0:requested_samples, :]
         print("\t\tPerfectly created ", ret_samples.shape[0], " samples for class")
         return pd.DataFrame(ret_samples)
