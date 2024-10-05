@@ -11,6 +11,8 @@ from sklearn.metrics.pairwise import euclidean_distances
 
 from imblearn.over_sampling import SMOTE
 
+from tqdm import tqdm
+
 
 class CentroidSampler:
     """
@@ -231,7 +233,7 @@ class CBR:
 
         x_ret = []
         y_ret = []
-        for cluster in range(-1, self._n_clusters):
+        for cluster in tqdm(range(-1, self._n_clusters), desc="   Sampling..."):
             x_cluster_all = x_in[cluster_labels == cluster, :]
             y_cluster_all = y_in[cluster_labels == cluster]
 

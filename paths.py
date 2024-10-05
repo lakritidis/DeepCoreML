@@ -1,8 +1,8 @@
 base_path = '/media/leo/7CE54B377BB9B18B/'
 # base_path = 'C:/Users/Owner/PycharmProjects/'
 
-output_path_performance = base_path + 'dev/Python/ctdGAN_results/results/'
-output_path_loss = output_path_performance + 'loss/'
+output_path_performance = base_path + 'dev/Python/Experiments/ctdGAN/results/'
+output_path_loss = output_path_performance + 'LossFun/'
 
 bin_cont = base_path + 'datasets/Imbalanced/bin_continuous/'
 bin_disc = base_path + 'datasets/Imbalanced/bin_discrete/'

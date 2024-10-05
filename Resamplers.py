@@ -110,6 +110,7 @@ class SDVResampler(BaseResampler):
                     reference_data = pd.DataFrame(data={str(dataset.class_column): [cls] * samples_to_generate})
                     generated_samples = self._model.sample_remaining_columns(
                         max_tries_per_batch=500, known_columns=reference_data).iloc[:, 0:dataset.dimensionality]
+
                     if generated_samples is not None and generated_samples.shape[0] > 0:
                         # print(generated_samples.shape)
                         generated_classes = np.full(generated_samples.shape[0], cls)
@@ -135,6 +136,31 @@ class SDVResampler(BaseResampler):
 
                     x_balanced = np.vstack((x_balanced, generated_samples))
                     y_balanced = np.hstack((y_balanced, generated_classes))
+
+        elif sampling_strategy == 'create-new':
+            x_balanced = None
+            y_balanced = None
+
+            s = 0
+            for cls in range(dataset.num_classes):
+                # Generate as many samples, as the corresponding class cls
+                samples_to_generate = int(gen_samples_ratio[cls])
+
+                reference_data = pd.DataFrame(data={str(dataset.class_column): [cls] * samples_to_generate})
+                generated_samples = self._model.sample_remaining_columns(
+                    max_tries_per_batch=500, known_columns=reference_data).iloc[:, 0:dataset.dimensionality]
+
+                if generated_samples is not None and generated_samples.shape[0] > 0:
+                    # print("\t\tCreated", generated_samples.shape[0], "samples")
+                    generated_classes = np.full(generated_samples.shape[0], cls)
+
+                    if s == 0:
+                        x_balanced = generated_samples
+                        y_balanced = generated_classes
+                        s = 1
+                    else:
+                        x_balanced = np.vstack((x_balanced, generated_samples))
+                        y_balanced = np.hstack((y_balanced, generated_classes))
 
         return x_balanced, y_balanced
 
@@ -175,7 +201,7 @@ class TestSynthesizers:
         emb_dim = 128
         knn = 10
         rad = 1
-        epochs = 10
+        epochs = 300
         batch_size = 100
         max_clusters = 20
 
@@ -252,7 +278,7 @@ class TestSynthesizers:
 
         # All over-samplers.
         self.over_samplers_ = (
-            # BaseResampler(name="None", model=None, random_state=random_state),
+            BaseResampler(name="None", model=None, random_state=random_state),
             # BaseResampler(name="ROS", model=ros, random_state=random_state),
             # BaseResampler(name="SMOTE", model=smote, random_state=random_state),
             # BaseResampler(name="BorderSMOTE", model=b_smote, random_state=random_state),
@@ -262,15 +288,15 @@ class TestSynthesizers:
             # BaseResampler(name="CBR", model=cbr, random_state=random_state),
             # CTResampler("ctGAN", model=ctgan_1, random_state=random_state),
 
-            # BaseResampler(name="C-GAN", model=c_gan, random_state=random_state),
-            # BaseResampler(name="SB-GAN", model=sb_gan, random_state=random_state),
-            # SDVResampler(name="CTGAN", model=ctgan, random_state=random_state),
-            # SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
-            # SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
-            # SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
+            BaseResampler(name="C-GAN", model=c_gan, random_state=random_state),
+            BaseResampler(name="SB-GAN", model=sb_gan, random_state=random_state),
+            SDVResampler(name="CTGAN", model=ctgan, random_state=random_state),
+            SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
+            SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
+            SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
 
-            # CTResampler("pac10_kmn_stds_probs", model=pac10_kmn_stds_probs, random_state=random_state),
-            # CTResampler("pac10_kmn_mms_probs", model=pac10_kmn_mms_probs, random_state=random_state),
+            CTResampler("pac10_kmn_stds_probs", model=pac10_kmn_stds_probs, random_state=random_state),
+            CTResampler("pac10_kmn_mms_probs", model=pac10_kmn_mms_probs, random_state=random_state),
             SDVResampler(name="CTAB-GAN", model=ctabgan_plus, random_state=random_state),
         )
 

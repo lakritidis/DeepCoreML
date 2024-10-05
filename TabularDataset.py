@@ -97,9 +97,9 @@ class TabularDataset(Dataset):
         self.num_rows = num_samples
         self.num_columns = self.dimensionality = x.shape[1]
 
-        print("Num Samples:", self.num_rows, "\nClass Distribution:")
-        for k in range(self.num_classes):
-            print("\tClass", k, ":", len(y[y == k]), "samples")
+        # print("Num Samples:", self.num_rows, "\nClass Distribution:")
+        # for k in range(self.num_classes):
+        #    print("\tClass", k, ":", len(y[y == k]), "samples")
 
     # Load a dataset from an external CSV file
     def load_from_csv(self, path=''):
@@ -182,11 +182,15 @@ class TabularDataset(Dataset):
         """
         Display the basic dataset parameters.
         """
-        print("Num Rows:", self.num_rows, ", Num Columns:", self.num_columns)
+        print(" ===================================================================================================")
+        print("Dataset:", self._name)
+        print("Rows:", self.num_rows)
+        print("Columns:", self.num_columns, ", Categorical:", len(self.categorical_columns))
         print("Encoded data Dimensions:", self.dimensionality)
         print("Classes:", self.num_classes, "- Class Distribution:")
         for k in range(self.num_classes):
-            print("\tClass", k, ":", len(self.y_[self.y_ == k]), "samples")
+            print("\t\tClass", k, ":", len(self.y_[self.y_ == k]), "samples")
+        print(" ===================================================================================================")
 
     def plot(self, dim1=0, dim2=1):
         """

@@ -3,8 +3,9 @@ import pandas as pd
 
 import torch
 import torch.nn as nn
-
 from torch.utils.data import DataLoader
+
+from tqdm import tqdm
 
 from DeepCoreML.TabularTransformer import TabularTransformer
 from .gan_discriminators import Critic
@@ -12,16 +13,17 @@ from .gan_generators import ctGenerator
 from .GAN_Synthesizer import GANSynthesizer
 from .ctd_clusterer import ctdClusterer
 
-import DeepCoreML.paths as paths
+# import DeepCoreML.paths as paths
 
 
 class ctdGAN(GANSynthesizer):
     """
     ctdGAN implementation
 
-    ctdGAN conditionally generates tabular data for confronting class imbalance in machine learning tasks. The model
-    is trained by embedding both cluster and class labels into the features vectors, and by penalizing incorrect
-    cluster and class predictions.
+    ctdGAN conditionally generates tabular data with the aim of confronting class imbalance. The model uses both
+    cluster and class labels for training. It applies a cluster-aware data transformation mechanism and introduces
+    a loss function that penalizes the generation of samples with incorrect cluster and class labels. New data
+    instances are generated via a probabilistic sampling strategy.
     """
 
     def __init__(self, discriminator=(128, 128), generator=(256, 256), embedding_dim=128, epochs=300, batch_size=32,
@@ -32,12 +34,12 @@ class ctdGAN(GANSynthesizer):
 
         Args:
             discriminator (tuple): a tuple with number of neurons for each fully connected layer of the model's Critic.
-                It determines the dimensionality of the output of each layer.
+                The tuple elements determine the dimensionality of the output of each layer.
             generator (tuple): a tuple with number of neurons for each fully connected layer of the model's Generator.
-                It determines the dimensionality of the output of each residual block of the Generator.
-            embedding_dim (int): Size of the random sample passed to the Generator.
+                The tuple elements determine the dimensionality of the output of each residual block of the Generator.
+            embedding_dim (int): Size of the normally distributed latent vector passed to the Generator.
             epochs (int): The number of training epochs.
-            batch_size (int): The number of data instances per training batch.
+            batch_size (int): The number of data instances per training batch. Must be α multiple of `pac`.
             scaler (string): A descriptor that defines a transformation on the cluster's data. Values:
 
               * '`None`'  : No transformation takes place; the data is considered immutable
@@ -48,10 +50,12 @@ class ctdGAN(GANSynthesizer):
             pac (int): The number of samples to group together as input to the Critic.
             lr (real): The value of the learning rate parameter for the Generator/Critic Adam optimizers.
             decay (real): The value of the weight decay parameter for the Generator/Critic Adam optimizers.
-            sampling_strategy (string or dictionary): How the algorithm generates samples:
+            sampling_strategy (string or dictionary): How the model generates samples:
 
-              * 'auto': the model balances the dataset by oversampling the minority classes.
-              * dict: a dictionary that indicates the number of samples to be generated from each class.
+                - 'auto': balance the dataset by oversampling the minority classes.
+                - 'balance-clusters': balance the dataset by balancing its clusters.
+                - 'create-new': create a new dataset with the same class distribution as the one that was trained with.
+                - dict: a dictionary that indicates the number of samples to be generated from each class
             max_clusters (int): The maximum number of clusters to create.
             random_state (int): Seed the random number generators. Use the same value for reproducible results.
         """
@@ -59,12 +63,12 @@ class ctdGAN(GANSynthesizer):
                          lr, lr, decay, decay, sampling_strategy, random_state)
 
         self._cluster_method = cluster_method
-        if scaler != 'mms11' and scaler != 'mms01' and scaler != 'stds' and scaler != 'yeo':
+        if scaler not in ('None', 'none', 'stds', 'mms01', 'mms11', 'yeo'):
             self._scaler = 'mms11'
         else:
             self._scaler = scaler
 
-        # clustered_transformer performs clustering and (optionally), data transformation
+        # clustered_transformer performs clustering and data transformation.
         self._clustered_transformer = None
 
         # discrete_transformer performs dataset-wise one-hot-encoding of the categorical columns
@@ -82,10 +86,10 @@ class ctdGAN(GANSynthesizer):
         https://drive.google.com/file/d/1AA5wPfZ1kquaRtVruCd6BiYZGcDeNxyP/view?usp=sharing
 
         Args:
-            logits (array(…, num_features)): Unnormalized log probabilities
+            logits (array(…, num_features)): Un-normalized log probabilities
             tau: Non-negative scalar temperature/
-            hard (bool): If True, the returned samples will be discretized as one-hot vectors,
-                but will be differentiated as if it is the soft sample in autograd
+            hard (bool): If True, the returned samples will be transformed to one-hot vectors,
+                but will be differentiated as if it is the soft sample in autograd.
             dim (int): A dimension along which softmax will be computed. Default: -1.
 
         Returns:
@@ -358,14 +362,14 @@ class ctdGAN(GANSynthesizer):
 
         return disc_loss, gen_loss
 
-    def train(self, x_train, y_train, categorical_columns=(), store_losses=None):
+    def _train(self, x_train, y_train, categorical_columns=(), store_losses=None):
         """
-        Conventional training process of a Cluster GAN. The Generator and the Discriminator are trained
-        simultaneously in the traditional adversarial fashion by optimizing `loss_function`.
+        ctdGAN training process. The Generator and the Critic are trained jointly in the traditional adversarial
+        fashion by optimizing `loss_function`.
 
         Args:
-            x_train: The training data instances (NumPy array).
-            y_train: The classes of the training data instances (NumPy array).
+            x_train (NumPy array): The training data instances.
+            y_train (NumPy array): The classes of the training data instances.
             categorical_columns: The columns to be considered as categorical
             store_losses: The file path where the values of the Discriminator and Generator loss functions are stored.
         """
@@ -395,7 +399,7 @@ class ctdGAN(GANSynthesizer):
 
         losses = []
         it = 0
-        for epoch in range(self._epochs):
+        for epoch in tqdm(range(self._epochs), desc="   Training..."):
             for real_data in train_dataloader:
                 if real_data.shape[0] > 1:
                     disc_loss, gen_loss = self.train_batch(real_data)
@@ -414,7 +418,7 @@ class ctdGAN(GANSynthesizer):
             x_train: The training data instances.
             y_train: The classes of the training data instances.
         """
-        self.train(x_train, y_train)
+        self._train(x_train, y_train)
 
     def sample(self, num_samples, y=None, u=None):
         """ Create artificial samples using the GAN's Generator.
@@ -546,13 +550,15 @@ class ctdGAN(GANSynthesizer):
         return return_samples
 
     def fit_resample(self, x_train, y_train, categorical_columns=()):
-        """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. The function renders sbGAN
+        """`fit_resample` alleviates the problem of class imbalance in imbalanced datasets. The function renders ctdGAN
         compatible with the `imblearn`'s interface, allowing its usage in over-sampling/under-sampling pipelines.
 
-        In the `fit` part, the input dataset is used to train sbGAN. In the `resample` part, sbGAN is employed to
-        generate synthetic data according to the value of `self._sampling_strategy`:
+        In the `fit` part, the input dataset is used for training.
+        In the `resample` part, the model generates synthetic data according to the value of `self._sampling_strategy`:
 
-        - 'auto': the model balances the dataset by oversampling the minority classes.
+        - 'auto': balance the dataset by oversampling the minority classes.
+        - 'balance-clusters': balance the dataset by balancing its clusters.
+        - 'create-new': create a new dataset with the same class distribution as the one that was trained with
         - dict: a dictionary that indicates the number of samples to be generated from each class
 
         Args:
@@ -565,9 +571,9 @@ class ctdGAN(GANSynthesizer):
             y_resampled: The classes of the training data instances + the classes of the generated data instances.
         """
 
-        # Train the GAN with the input data
+        # Train ctdGAN with the input data
         # self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=paths.output_path_loss)
-        self.train(x_train, y_train, categorical_columns=categorical_columns, store_losses=None)
+        self._train(x_train, y_train, categorical_columns=categorical_columns, store_losses=None)
 
         x_resampled = np.copy(x_train)
         y_resampled = np.copy(y_train)
@@ -579,7 +585,7 @@ class ctdGAN(GANSynthesizer):
             num_majority_samples = np.max(np.array(self._samples_per_class))
 
             # Perform oversampling
-            for cls in range(self._n_classes):
+            for cls in tqdm(range(self._n_classes), desc="   Sampling..."):
                 if cls != majority_class:
                     samples_to_generate = num_majority_samples - self._samples_per_class[cls]
 
@@ -591,7 +597,7 @@ class ctdGAN(GANSynthesizer):
                         x_resampled = np.vstack((x_resampled, generated_samples))
                         y_resampled = np.hstack((y_resampled, generated_classes))
 
-        if self._sampling_strategy == 'bal':
+        if self._sampling_strategy == 'balance-clusters':
             majority_class = np.array(self._samples_per_class).argmax()
             imb_matrix = self._clustered_transformer.imbalance_matrix_
 
@@ -602,7 +608,7 @@ class ctdGAN(GANSynthesizer):
             # print(majority_samples)
             # print(majority_classes)
 
-            for u in range(self._n_clusters):
+            for u in tqdm(range(self._n_clusters), desc="   Sampling..."):
                 # print("Cluster", u)
                 for cls in range(self._n_classes):
                     ir = imb_matrix[cls][u] / majority_samples[u]
@@ -625,7 +631,7 @@ class ctdGAN(GANSynthesizer):
         # dictionary mode: the keys correspond to the targeted classes. The values correspond to the desired number of
         # samples for each targeted class.
         elif isinstance(self._sampling_strategy, dict):
-            for cls in self._sampling_strategy:
+            for cls in tqdm(self._sampling_strategy, desc="   Sampling..."):
                 # In imblearn sampling strategy stores the class distribution of the output dataset. So we have to
                 # create the half number of samples, and we divide by 2.
                 samples_to_generate = int(self._sampling_strategy[cls] / 2)
@@ -639,5 +645,27 @@ class ctdGAN(GANSynthesizer):
 
                     x_resampled = np.vstack((x_resampled, generated_samples))
                     y_resampled = np.hstack((y_resampled, generated_classes))
+
+        elif self._sampling_strategy == 'create-new':
+            x_resampled = None
+            y_resampled = None
+
+            s = 0
+            for cls in tqdm(range(self._n_classes), desc="   Sampling..."):
+                # Generate as many samples, as the corresponding class cls
+                samples_to_generate = int(self._samples_per_class[cls])
+                generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
+
+                if generated_samples is not None and generated_samples.shape[0] > 0:
+                    # print("\t\tCreated", generated_samples.shape[0], "samples")
+                    generated_classes = np.full(generated_samples.shape[0], cls)
+
+                    if s == 0:
+                        x_resampled = generated_samples
+                        y_resampled = generated_classes
+                        s = 1
+                    else:
+                        x_resampled = np.vstack((x_resampled, generated_samples))
+                        y_resampled = np.hstack((y_resampled, generated_classes))
 
         return x_resampled, y_resampled

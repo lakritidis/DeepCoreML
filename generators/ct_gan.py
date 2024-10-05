@@ -11,6 +11,8 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
+from tqdm import tqdm
+
 from sklearn.preprocessing import OneHotEncoder
 
 from DeepCoreML.TabularTransformer import TabularTransformer
@@ -358,7 +360,7 @@ class ctGAN(GANSynthesizer):
         loss_d = loss_g = 0
         c2 = 0
         losses = []
-        for i in range(epochs):
+        for i in tqdm(range(epochs), desc="Training..."):
             for id_ in range(steps_per_epoch):
 
                 for n in range(self._discriminator_steps):

@@ -10,7 +10,7 @@ num_threads = 1
 os.environ['OMP_NUM_THREADS'] = str(num_threads)
 np.set_printoptions(linewidth=400, threshold=sys.maxsize)
 
-seed = 42
+seed = 11
 
 datasets = {
     # Part 1
@@ -80,12 +80,11 @@ datasets_problematic = {
 }
 
 if __name__ == '__main__':
-    # eval_methods.test_model('CTABGAN+', datasets['DryBean'], seed)
+    # eval_methods.test_model('CTDGAN', datasets['ecoli1'], seed)
 
     eval_methods.eval_resampling(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
     # eval_methods.eval_detectability(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
-
-    # eval_methods.eval_ml_efficacy(datasets, num_threads, seed)
+    # eval_methods.eval_classifier_similarity(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
 
     # Experiments performed in Information Sciences 2024 paper
     # eval_methods.eval_oversampling_efficacy(datasets_imb, num_threads, seed)

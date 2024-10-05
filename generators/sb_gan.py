@@ -6,10 +6,12 @@
 # Intelligence (ICTAI), pp. 444-451, 2023.
 
 import numpy as np
+
 import torch
 import torch.nn as nn
-
 from torch.utils.data import DataLoader
+
+from tqdm import tqdm
 
 from sklearn.neighbors import KDTree
 
@@ -247,7 +249,7 @@ class sbGAN(GANSynthesizer):
                                              lr=self._gen_lr, weight_decay=self._gen_decay, betas=(0.5, 0.9))
 
         disc_loss, gen_loss = 0, 0
-        for epoch in range(self._epochs):
+        for _ in tqdm(range(self._epochs), desc="   Training..."):
             for real_data in train_dataloader:
                 if real_data.shape[0] > 1:
                     disc_loss, gen_loss = self.train_batch(real_data)
@@ -333,7 +335,7 @@ class sbGAN(GANSynthesizer):
             num_majority_samples = np.max(np.array(self._gen_samples_ratio))
 
             # Perform oversampling
-            for cls in range(self._n_classes):
+            for cls in tqdm(range(self._n_classes), desc="   Sampling..."):
                 if cls != majority_class:
                     samples_to_generate = num_majority_samples - self._gen_samples_ratio[cls]
 
@@ -349,7 +351,7 @@ class sbGAN(GANSynthesizer):
         # dictionary mode: the keys correspond to the targeted classes. The values correspond to the desired number of
         # samples for each targeted class.
         elif isinstance(self._sampling_strategy, dict):
-            for cls in self._sampling_strategy:
+            for cls in tqdm(self._sampling_strategy, desc="   Sampling..."):
                 # In imblearn sampling strategy stores the class distribution of the output dataset. So we have to
                 # create the half number of samples, and we divide by 2.
                 samples_to_generate = int(self._sampling_strategy[cls] / 2)
@@ -362,4 +364,25 @@ class sbGAN(GANSynthesizer):
                 x_resampled = np.vstack((x_resampled, generated_samples))
                 y_resampled = np.hstack((y_resampled, generated_classes))
 
+        elif self._sampling_strategy == 'create-new':
+            x_resampled = None
+            y_resampled = None
+
+            s = 0
+            for cls in tqdm(range(self._n_classes), desc="   Sampling..."):
+                # Generate as many samples, as the corresponding class cls
+                samples_to_generate = int(self._samples_per_class[cls])
+                generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
+
+                if generated_samples is not None and generated_samples.shape[0] > 0:
+                    # print("\t\tCreated", generated_samples.shape[0], "samples")
+                    generated_classes = np.full(generated_samples.shape[0], cls)
+
+                    if s == 0:
+                        x_resampled = generated_samples
+                        y_resampled = generated_classes
+                        s = 1
+                    else:
+                        x_resampled = np.vstack((x_resampled, generated_samples))
+                        y_resampled = np.hstack((y_resampled, generated_classes))
         return x_resampled, y_resampled
