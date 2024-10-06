@@ -182,7 +182,7 @@ class TabularDataset(Dataset):
         """
         Display the basic dataset parameters.
         """
-        print(" ===================================================================================================")
+        print("===================================================================================================")
         print("Dataset:", self._name)
         print("Rows:", self.num_rows)
         print("Columns:", self.num_columns, ", Categorical:", len(self.categorical_columns))
@@ -190,7 +190,7 @@ class TabularDataset(Dataset):
         print("Classes:", self.num_classes, "- Class Distribution:")
         for k in range(self.num_classes):
             print("\t\tClass", k, ":", len(self.y_[self.y_ == k]), "samples")
-        print(" ===================================================================================================")
+        print("===================================================================================================")
 
     def plot(self, dim1=0, dim2=1):
         """

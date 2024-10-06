@@ -10,7 +10,7 @@ num_threads = 1
 os.environ['OMP_NUM_THREADS'] = str(num_threads)
 np.set_printoptions(linewidth=400, threshold=sys.maxsize)
 
-seed = 11
+seed = 0
 
 datasets = {
     # Part 1
@@ -45,7 +45,7 @@ datasets = {
     'anemia': {'path': paths.multi_cont + 'anemia.csv', 'categorical_cols': (), 'class_col': 14},
     'Churn': {'path': paths.bin_mix + 'Churn_Modelling.csv', 'categorical_cols': (1, 2, 7, 8), 'class_col': 10},
     'DryBean': {'path': paths.multi_cont + 'DryBean.csv', 'categorical_cols': (),
-                'class_col': 16}, # <-- TVAE FAILS
+                'class_col': 16}, # <-- TVAE FAILS (RESAMPLING)
     'ecoli1': {'path': paths.bin_cont + 'ecoli1.csv', 'categorical_cols': (), 'class_col': 7},
     'ecoli2': {'path': paths.bin_cont + 'ecoli2.csv', 'categorical_cols': (), 'class_col': 7},
     'ecoli3': {'path': paths.bin_cont + 'ecoli3.csv', 'categorical_cols': (), 'class_col': 7},
@@ -82,9 +82,9 @@ datasets_problematic = {
 if __name__ == '__main__':
     # eval_methods.test_model('CTDGAN', datasets['ecoli1'], seed)
 
-    eval_methods.eval_resampling(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
+    # eval_methods.eval_resampling(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
     # eval_methods.eval_detectability(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
-    # eval_methods.eval_classifier_similarity(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
+    eval_methods.eval_classifier_similarity(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
 
     # Experiments performed in Information Sciences 2024 paper
     # eval_methods.eval_oversampling_efficacy(datasets_imb, num_threads, seed)

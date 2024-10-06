@@ -124,7 +124,8 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
         dataset.load_from_csv(path=ds['path'])
         performance_list = []
 
-        print("\n=======================\n Resampling effectiveness experiment")
+        print("\n===================================================================================================")
+        print("Resampling effectiveness experiment")
         dataset.display_params()
 
         # A SingleTableMetadata() object is required by the SDV models
@@ -214,8 +215,6 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                                   performance_list)
             d_drh.record_results()
 
-    print("\n=================================\n")
-
 
 # To evaluate how hard it is to distinguish between real and synthetic instances, we:
 # 1. Create a synthetic dataset with the same number of samples and class distribution as the original one.
@@ -272,7 +271,8 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
         dataset.load_from_csv(path=ds['path'])
         performance_list = []
 
-        print("\n=======================\n Detectability Test", key)
+        print("\n===================================================================================================")
+        print("Detectability experiment")
         dataset.display_params()
 
         # A SingleTableMetadata() object is required by the SDV models
@@ -371,8 +371,6 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
                               performance_list)
         d_drh.record_results()
 
-    print("\n=================================\n")
-
 
 def eval_classifier_similarity(datasets, num_folds=5, transformer=None, random_state=0):
     """
@@ -421,7 +419,8 @@ def eval_classifier_similarity(datasets, num_folds=5, transformer=None, random_s
         dataset.load_from_csv(path=ds['path'])
         performance_list = []
 
-        print("\n=======================\n Classification performance similarity experiment")
+        print("\n===================================================================================================")
+        print("Classification performance similarity experiment")
         dataset.display_params()
 
         # A SingleTableMetadata() object is required by the SDV models
@@ -466,52 +465,51 @@ def eval_classifier_similarity(datasets, num_folds=5, transformer=None, random_s
                     y_balanced = dataset.y_[train_idx]
                 else:
                     x_balanced, y_balanced = synthesizer.fit_resample(dataset=dataset, training_set_rows=train_idx,
-                                                                      sampling_strategy='auto')
+                                                                      sampling_strategy='create-new')
 
                 oversampling_duration = time.time() - t_s
 
                 # Normalize data before feeding it to the classifiers
-                if transformer == 'standardizer':
-                    scaler = StandardScaler()
-                    x_balanced_scaled = scaler.fit_transform(x_balanced)
-                    x_test_scaled = scaler.transform(x_test)
-                else:
-                    x_balanced_scaled = x_balanced
-                    x_test_scaled = x_test
+                if x_balanced is not None:
+                    if transformer == 'standardizer':
+                        scaler = StandardScaler()
+                        x_balanced_scaled = scaler.fit_transform(x_balanced)
+                        x_test_scaled = scaler.transform(x_test)
+                    else:
+                        x_balanced_scaled = x_balanced
+                        x_test_scaled = x_test
 
-                # Initialize a new set of classifiers
-                classifiers = Classifiers(random_state=random_state)
+                    # Initialize a new set of classifiers
+                    classifiers = Classifiers(random_state=random_state)
 
-                # For each classifier
-                for classifier in classifiers.models_:
-                    reset_random_states(np_random_state, torch_random_state, cuda_random_state)
+                    # For each classifier
+                    for classifier in tqdm(classifiers.models_, "Classifying..."):
+                        reset_random_states(np_random_state, torch_random_state, cuda_random_state)
 
-                    classifier.fit(x_balanced_scaled, y_balanced)
-                    y_predict = classifier.predict(x_test_scaled)
+                        classifier.fit(x_balanced_scaled, y_balanced)
+                        y_predict = classifier.predict(x_test_scaled)
 
-                    for scorer in scorers:
-                        # Binary classification evaluation
-                        if dataset.num_classes < 3:
-                            performance = scorers[scorer](y_test, y_predict)
-                        # MulTi-class classification evaluation
-                        else:
-                            metric_arguments = inspect.signature(scorers[scorer]).parameters
-                            if 'average' in metric_arguments:
-                                performance = scorers[scorer](y_test, y_predict, average='micro')
-                            else:
+                        for scorer in scorers:
+                            # Binary classification evaluation
+                            if dataset.num_classes < 3:
                                 performance = scorers[scorer](y_test, y_predict)
+                            # MulTi-class classification evaluation
+                            else:
+                                metric_arguments = inspect.signature(scorers[scorer]).parameters
+                                if 'average' in metric_arguments:
+                                    performance = scorers[scorer](y_test, y_predict, average='micro')
+                                else:
+                                    performance = scorers[scorer](y_test, y_predict)
 
-                        lst = [key, n_fold, synthesizer.name_, classifier.name_, scorer, performance]
+                            lst = [key, n_fold, synthesizer.name_, classifier.name_, scorer, performance]
+                            performance_list.append(lst)
+
+                        lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                         performance_list.append(lst)
-
-                    lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
-                    performance_list.append(lst)
 
             d_drh = ResultHandler("Similarity/splits/Similarity_" + key + "_seed_" + str(random_state),
                                   performance_list)
             d_drh.record_results()
-
-    print("\n=================================\n")
 
 
 # This function uses an ImbLearn Pipeline. Each Oversampling/Under-sampling method MUST support the fit_resample method

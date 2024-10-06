@@ -294,10 +294,10 @@ class TestSynthesizers:
             SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
             SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
             SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
+            SDVResampler(name="CTAB-GAN", model=ctabgan_plus, random_state=random_state),
 
             CTResampler("pac10_kmn_stds_probs", model=pac10_kmn_stds_probs, random_state=random_state),
             CTResampler("pac10_kmn_mms_probs", model=pac10_kmn_mms_probs, random_state=random_state),
-            SDVResampler(name="CTAB-GAN", model=ctabgan_plus, random_state=random_state),
         )
 
         self.over_samplers_sdv_ = (

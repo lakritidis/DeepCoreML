@@ -438,7 +438,7 @@ class CTABGANSynthesizer:
         ci = 5
 
         steps_per_epoch = max(1, len(train_data) // self.batch_size)
-        for _ in tqdm(range(self.epochs)):
+        for _ in tqdm(range(self.epochs), desc="   Training..."):
             for id_ in range(steps_per_epoch):
 
                 for _ in range(ci):
@@ -612,13 +612,15 @@ class CTABGANSynthesizer:
         num_samples = 0
         num_retries = 0
         generated_samples = []
+        pbar = tqdm(total=requested_samples)
         while num_samples < requested_samples:
             generated_data = self.sample(requested_samples)
             num_retries += 1
 
             if num_retries > max_tries_per_batch:
                 ret_samples = np.array(generated_samples)
-                print("\t\tIncompletely created ", ret_samples.shape[0], "for class")
+                pbar.close()
+                # print("\t\tIncompletely created ", ret_samples.shape[0], "for class")
                 return pd.DataFrame(ret_samples)
 
             num_generated_samples = generated_data.shape[0]
@@ -629,7 +631,9 @@ class CTABGANSynthesizer:
                     if ref_data[i] == np.round(generated_data[i, int(known_columns.columns[j])]):
                         generated_samples.append(generated_data[i, :])
                         num_samples += 1
+                        pbar.update(1)
 
         ret_samples = np.array(generated_samples)[0:requested_samples, :]
-        print("\t\tPerfectly created ", ret_samples.shape[0], " samples for class")
+        # print("\t\tPerfectly created ", ret_samples.shape[0], " samples for class")
+        pbar.close()
         return pd.DataFrame(ret_samples)

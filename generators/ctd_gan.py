@@ -527,7 +527,7 @@ class ctdGAN(GANSynthesizer):
                     num_generated_samples += 1
                     if num_generated_samples > num_samples:
                         return_samples = np.vstack(reconstructed_samples)
-                        print("\t\t\tCreated ", return_samples.shape, "samples from class", y)
+                        # print("\t\t\tCreated ", return_samples.shape, "samples from class", y)
                         return return_samples
                     reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
                     reconstructed_samples.append(reconstructed_sample)
@@ -538,7 +538,7 @@ class ctdGAN(GANSynthesizer):
             if num_retries > max_retries:
                 # If no sample has been retrieved, keep the last num samples
                 if len(reconstructed_samples) == 0:
-                    print("\t\t\tI did not retrieve any results from class", y)
+                    # print("\t\t\tI did not retrieve any results from class", y)
                     for s in range(num_samples):
                         z = generated_samples[s].reshape(1, -1)
                         reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
@@ -546,7 +546,7 @@ class ctdGAN(GANSynthesizer):
                 break
 
         return_samples = np.vstack(reconstructed_samples)
-        print("\t\t\tIncompletely Created ", return_samples.shape, "samples from class", y)
+        # print("\t\t\tIncompletely Created ", return_samples.shape, "samples from class", y)
         return return_samples
 
     def fit_resample(self, x_train, y_train, categorical_columns=()):
