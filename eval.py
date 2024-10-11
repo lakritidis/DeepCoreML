@@ -19,7 +19,7 @@ from imblearn.metrics import sensitivity_score, specificity_score
 
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import f1_score, accuracy_score, balanced_accuracy_score, precision_score, recall_score
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 
 from sdv.metadata import SingleTableMetadata
 
@@ -372,7 +372,7 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
         d_drh.record_results()
 
 
-def eval_classifier_similarity(datasets, num_folds=5, transformer=None, random_state=0):
+def eval_fidelity(datasets, num_folds=5, transformer=None, random_state=0):
     """
     Evaluate the ability of a generative model to produce high-fidelity data.
     In this experiment we:
@@ -384,7 +384,7 @@ def eval_classifier_similarity(datasets, num_folds=5, transformer=None, random_s
     Args:
         datasets (dict): The datasets to be used for evaluation.
         num_folds (int): The number of cross validation folds.
-        transformer (str): Determines if/how the balanced data will be normalized.
+        transformer (str or None): Determines if/how the balanced data will be normalized.
         random_state: Controls random number generation. Set this to a fixed integer to get reproducible results.
     """
 
@@ -423,6 +423,15 @@ def eval_classifier_similarity(datasets, num_folds=5, transformer=None, random_s
         print("Classification performance similarity experiment")
         dataset.display_params()
 
+        #######################################################################################
+        # Begin evaluation of the classifiers in the original dataset
+        #######################################################################################
+        classifiers = Classifiers(random_state=random_state)
+
+        # Apply k-fold cross validation
+        skf = StratifiedKFold(n_splits=num_folds, shuffle=False, random_state=None)
+        n_fold = 0
+
         # A SingleTableMetadata() object is required by the SDV models
         metadata = SingleTableMetadata()
         metadata.detect_from_dataframe(dataset.df_)
@@ -435,79 +444,112 @@ def eval_classifier_similarity(datasets, num_folds=5, transformer=None, random_s
         # The last column becomes categorical - This structure is required by the SDV models.
         metadata.columns[k] = {'sdtype': 'categorical'}
 
-        # Apply k-fold cross validation
-        skf = StratifiedKFold(n_splits=num_folds, shuffle=False, random_state=None)
-        n_fold = 0
+        print("\t\tClassifying in the original dataset...")
 
         # For each fold
         for train_idx, test_idx in skf.split(dataset.x_, dataset.y_):
             n_fold += 1
-            print("\tFold: ", n_fold)
+            x_train = dataset.x_[train_idx]
+            y_train = dataset.y_[train_idx]
 
             x_test = dataset.x_[test_idx]
             y_test = dataset.y_[test_idx]
 
-            # Initialize a new set of data samplers
-            synthesizers = TestSynthesizers(metadata, sampling_strategy='auto', random_state=random_state)
-
-            # For each sampler, fit and resample
-            num_synthesizer = 0
-            for synthesizer in synthesizers.over_samplers_:
-                num_synthesizer += 1
-                t_s = time.time()
-
+            for classifier in classifiers.models_:
                 reset_random_states(np_random_state, torch_random_state, cuda_random_state)
-                print("\t\tSynthesizer: ", synthesizer.name_)
 
-                # Generate synthetic data with the sampler.
-                if synthesizer.name_ == 'None':
-                    x_balanced = dataset.x_[train_idx]
-                    y_balanced = dataset.y_[train_idx]
-                else:
-                    x_balanced, y_balanced = synthesizer.fit_resample(dataset=dataset, training_set_rows=train_idx,
-                                                                      sampling_strategy='create-new')
+                classifier.fit(x_train, y_train)
+                y_predict = classifier.predict(x_test)
 
-                oversampling_duration = time.time() - t_s
-
-                # Normalize data before feeding it to the classifiers
-                if x_balanced is not None:
-                    if transformer == 'standardizer':
-                        scaler = StandardScaler()
-                        x_balanced_scaled = scaler.fit_transform(x_balanced)
-                        x_test_scaled = scaler.transform(x_test)
+                for scorer in scorers:
+                    # Binary classification evaluation
+                    if dataset.num_classes < 3:
+                        performance = scorers[scorer](y_test, y_predict)
+                    # MulTi-class classification evaluation
                     else:
-                        x_balanced_scaled = x_balanced
-                        x_test_scaled = x_test
+                        metric_arguments = inspect.signature(scorers[scorer]).parameters
+                        if 'average' in metric_arguments:
+                            performance = scorers[scorer](y_test, y_predict, average='micro')
+                        else:
+                            performance = scorers[scorer](y_test, y_predict)
 
-                    # Initialize a new set of classifiers
-                    classifiers = Classifiers(random_state=random_state)
+                    lst = [key, n_fold, "None", classifier.name_, scorer, performance]
+                    performance_list.append(lst)
 
-                    # For each classifier
-                    for classifier in tqdm(classifiers.models_, "Classifying..."):
-                        reset_random_states(np_random_state, torch_random_state, cuda_random_state)
+        #######################################################################################
+        # Begin evaluation of the classifiers in the synthetic dataset
+        #######################################################################################
 
-                        classifier.fit(x_balanced_scaled, y_balanced)
-                        y_predict = classifier.predict(x_test_scaled)
+        # Initialize a new set of data samplers
+        synthesizers = TestSynthesizers(metadata, sampling_strategy='create-new', random_state=random_state)
 
-                        for scorer in scorers:
-                            # Binary classification evaluation
-                            if dataset.num_classes < 3:
-                                performance = scorers[scorer](y_test, y_predict)
-                            # MulTi-class classification evaluation
+        # For each sampler, fit and resample
+        num_synthesizer = 0
+        for synthesizer in synthesizers.over_samplers_:
+            num_synthesizer += 1
+            t_s = time.time()
+
+            reset_random_states(np_random_state, torch_random_state, cuda_random_state)
+            print("\t\tSynthesizer: ", synthesizer.name_)
+
+            idx = np.array([i for i in range(dataset.num_rows)])
+
+            # Generate synthetic data with the sampler.
+            x_balanced, y_balanced = synthesizer.fit_resample(
+                dataset=dataset, training_set_rows=idx, sampling_strategy='create-new')
+
+            oversampling_duration = time.time() - t_s
+
+            skf = StratifiedKFold(n_splits=num_folds, shuffle=False, random_state=None)
+            n_fold = 0
+
+            class_encoder = LabelEncoder()
+            y_balanced = class_encoder.fit_transform(y_balanced)
+
+            for c_train_idx, c_test_idx in skf.split(x_balanced, y_balanced):
+                x_c_train = x_balanced[c_train_idx]
+                y_c_train = y_balanced[c_train_idx]
+
+                x_c_test = x_balanced[c_test_idx]
+                y_c_test = y_balanced[c_test_idx]
+
+                if transformer == 'standardizer':
+                    scaler = StandardScaler()
+                    x_balanced_scaled = scaler.fit_transform(x_c_train)
+                    x_test_scaled = scaler.transform(x_c_test)
+                else:
+                    x_balanced_scaled = x_c_train
+                    x_test_scaled = x_c_test
+
+                # Initialize a new set of classifiers
+                bal_classifiers = Classifiers(random_state=random_state)
+
+                # For each classifier
+                for classifier in bal_classifiers.models_:
+                    reset_random_states(np_random_state, torch_random_state, cuda_random_state)
+
+                    classifier.fit(x_balanced_scaled, y_c_train)
+                    y_predict = classifier.predict(x_test_scaled)
+
+                    for scorer in scorers:
+                        # Binary classification evaluation
+                        if dataset.num_classes < 3:
+                            performance = scorers[scorer](y_c_test, y_predict)
+                        # MulTi-class classification evaluation
+                        else:
+                            metric_arguments = inspect.signature(scorers[scorer]).parameters
+                            if 'average' in metric_arguments:
+                                performance = scorers[scorer](y_c_test, y_predict, average='micro')
                             else:
-                                metric_arguments = inspect.signature(scorers[scorer]).parameters
-                                if 'average' in metric_arguments:
-                                    performance = scorers[scorer](y_test, y_predict, average='micro')
-                                else:
-                                    performance = scorers[scorer](y_test, y_predict)
+                                performance = scorers[scorer](y_c_test, y_predict)
 
-                            lst = [key, n_fold, synthesizer.name_, classifier.name_, scorer, performance]
-                            performance_list.append(lst)
-
-                        lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
+                        lst = [key, n_fold, synthesizer.name_, classifier.name_, scorer, performance]
                         performance_list.append(lst)
 
-            d_drh = ResultHandler("Similarity/splits/Similarity_" + key + "_seed_" + str(random_state),
+                    lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
+                    performance_list.append(lst)
+
+            d_drh = ResultHandler("Fidelity/splits/Fidelity_" + key + "_seed_" + str(random_state),
                                   performance_list)
             d_drh.record_results()
 

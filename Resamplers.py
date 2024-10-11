@@ -141,7 +141,6 @@ class SDVResampler(BaseResampler):
             x_balanced = None
             y_balanced = None
 
-            s = 0
             for cls in range(dataset.num_classes):
                 # Generate as many samples, as the corresponding class cls
                 samples_to_generate = int(gen_samples_ratio[cls])
@@ -151,17 +150,17 @@ class SDVResampler(BaseResampler):
                     max_tries_per_batch=500, known_columns=reference_data).iloc[:, 0:dataset.dimensionality]
 
                 if generated_samples is not None and generated_samples.shape[0] > 0:
-                    # print("\t\tCreated", generated_samples.shape[0], "samples")
+                    # print("\t\tCreated", generated_samples.shape[0], "samples from class", cls)
                     generated_classes = np.full(generated_samples.shape[0], cls)
 
-                    if s == 0:
+                    if cls == 0:
                         x_balanced = generated_samples
                         y_balanced = generated_classes
-                        s = 1
                     else:
                         x_balanced = np.vstack((x_balanced, generated_samples))
                         y_balanced = np.hstack((y_balanced, generated_classes))
-
+                else:
+                    print("Could not create samples from class", cls)
         return x_balanced, y_balanced
 
 
@@ -278,7 +277,7 @@ class TestSynthesizers:
 
         # All over-samplers.
         self.over_samplers_ = (
-            BaseResampler(name="None", model=None, random_state=random_state),
+            # BaseResampler(name="None", model=None, random_state=random_state),
             # BaseResampler(name="ROS", model=ros, random_state=random_state),
             # BaseResampler(name="SMOTE", model=smote, random_state=random_state),
             # BaseResampler(name="BorderSMOTE", model=b_smote, random_state=random_state),

@@ -600,4 +600,26 @@ class ctGAN(GANSynthesizer):
                 x_resampled = np.vstack((x_resampled, generated_samples))
                 y_resampled = np.hstack((y_resampled, generated_classes))
 
+        elif self._sampling_strategy == 'create-new':
+            x_resampled = None
+            y_resampled = None
+
+            s = 0
+            for cls in tqdm(range(self._n_classes), desc="   Sampling..."):
+                # Generate as many samples, as the corresponding class cls
+                samples_to_generate = int(self._gen_samples_ratio[cls])
+                generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
+
+                if generated_samples is not None and generated_samples.shape[0] > 0:
+                    # print("\t\tCreated", generated_samples.shape[0], "samples")
+                    generated_classes = np.full(generated_samples.shape[0], cls)
+
+                    if s == 0:
+                        x_resampled = generated_samples
+                        y_resampled = generated_classes
+                        s = 1
+                    else:
+                        x_resampled = np.vstack((x_resampled, generated_samples))
+                        y_resampled = np.hstack((y_resampled, generated_classes))
+
         return x_resampled, y_resampled

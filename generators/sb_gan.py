@@ -371,7 +371,7 @@ class sbGAN(GANSynthesizer):
             s = 0
             for cls in tqdm(range(self._n_classes), desc="   Sampling..."):
                 # Generate as many samples, as the corresponding class cls
-                samples_to_generate = int(self._samples_per_class[cls])
+                samples_to_generate = int(self._gen_samples_ratio[cls])
                 generated_samples = self.sample(num_samples=samples_to_generate, y=cls)
 
                 if generated_samples is not None and generated_samples.shape[0] > 0:
