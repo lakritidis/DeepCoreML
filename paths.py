@@ -1,5 +1,6 @@
 base_path = '/media/leo/7CE54B377BB9B18B/'
 # base_path = 'C:/Users/Owner/PycharmProjects/'
+# base_path = ('D:/')
 
 output_path_performance = base_path + 'dev/Python/Experiments/ctdGAN/results/'
 output_path_loss = output_path_performance + 'LossFun/'

@@ -244,7 +244,8 @@ class ctdClusterer:
 
         # Find the optimal number of clusters (best_k).
         # Perform multiple executions and pick the one that produces the minimum scaled inertia.
-        jobs = 0.2 * multiprocessing.cpu_count()
+        # jobs = 0.2 * multiprocessing.cpu_count()
+        jobs = -1
         k_range = range(2, self._max_clusters)
         scores = Parallel(n_jobs=jobs)(delayed(self._run_clustering)(x_scaled, k) for k in k_range)
         best = min(scores, key=lambda score_tuple: score_tuple[1])

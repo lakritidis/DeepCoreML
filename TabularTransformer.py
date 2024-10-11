@@ -249,8 +249,8 @@ class TabularTransformer(object):
                 process = delayed(self.transform_discrete)(column_transform_info, data)
             processes.append(process)
 
-        # return Parallel(n_jobs=-1)(processes)
-        return Parallel(n_jobs=0.5 * multiprocessing.cpu_count())(processes)
+        return Parallel(n_jobs=-1)(processes)
+        # return Parallel(n_jobs=0.5 * multiprocessing.cpu_count())(processes)
 
     def transform(self, raw_data):
         """Take raw data and output a matrix data."""

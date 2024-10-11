@@ -10,7 +10,7 @@ num_threads = 1
 os.environ['OMP_NUM_THREADS'] = str(num_threads)
 np.set_printoptions(linewidth=400, threshold=sys.maxsize)
 
-seed = 0
+seed = 1
 
 datasets = {
     # Part 1
@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
     # eval_methods.eval_resampling(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
     # eval_methods.eval_detectability(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
-    eval_methods.eval_classifier_similarity(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
+    eval_methods.eval_fidelity(datasets=datasets, transformer=None, num_folds=5, random_state=seed)
 
     # Experiments performed in Information Sciences 2024 paper
     # eval_methods.eval_oversampling_efficacy(datasets_imb, num_threads, seed)
