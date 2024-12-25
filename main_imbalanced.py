@@ -86,5 +86,5 @@ if __name__ == '__main__':
     # eval_methods.eval_detectability(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
     eval_methods.eval_fidelity(datasets=datasets, transformer=None, num_folds=5, random_state=seed)
 
-    # Experiments performed in Information Sciences 2024 paper
+    # Experiments performed in the Information Sciences 2024 paper
     # eval_methods.eval_oversampling_efficacy(datasets_imb, num_threads, seed)
