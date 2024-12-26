@@ -1,7 +1,7 @@
 from sklearn.neural_network import MLPClassifier
-# from sklearn.svm import SVC
-# from sklearn.tree import DecisionTreeClassifier
-# from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
 
@@ -25,13 +25,13 @@ class Classifiers:
         self.num_classifiers_ = 0
 
         self.models_ = (
-            # BaseClassifier("Logistic Regression", "LR",
-            #                LogisticRegression(max_iter=300, random_state=random_state)),
-            # BaseClassifier("Support Vector Machine", "SVM",
-            #               SVC(kernel='rbf', C=1, random_state=random_state)),
-            # BaseClassifier("Decision Tree", "DT",
-            #               DecisionTreeClassifier(criterion='gini', max_depth=None,
-            #                                      max_features=None, random_state=random_state)),
+            BaseClassifier("Logistic Regression", "LR",
+                            LogisticRegression(max_iter=300, random_state=random_state)),
+            BaseClassifier("Support Vector Machine", "SVM",
+                           SVC(kernel='rbf', C=1, random_state=random_state)),
+            BaseClassifier("Decision Tree", "DT",
+                           DecisionTreeClassifier(criterion='gini', max_depth=None,
+                                                  max_features=None, random_state=random_state)),
             BaseClassifier("XGBoost", "XGBoost", xgb.XGBClassifier()),
             BaseClassifier("Random Forest", "RF",
                            RandomForestClassifier(n_estimators=50, criterion='gini', max_depth=None,

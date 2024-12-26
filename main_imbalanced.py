@@ -3,8 +3,8 @@ import sys
 
 import numpy as np
 
-import eval as eval_methods
-import paths as paths
+import DeepCoreML.eval as eval_methods
+import DeepCoreML.paths as paths
 
 num_threads = 1
 os.environ['OMP_NUM_THREADS'] = str(num_threads)

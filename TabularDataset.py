@@ -14,7 +14,7 @@ from sklearn.metrics import make_scorer
 from sklearn.metrics import f1_score, accuracy_score, balanced_accuracy_score, precision_score, recall_score
 from imblearn.metrics import sensitivity_score, specificity_score
 
-from Dataset import Dataset
+from DeepCoreML.Dataset import Dataset
 
 import warnings
 

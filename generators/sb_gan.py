@@ -16,10 +16,9 @@ from tqdm import tqdm
 from sklearn.neighbors import KDTree
 
 from DeepCoreML.TabularTransformer import TabularTransformer
-
-from .gan_discriminators import PackedDiscriminator
-from .gan_generators import Generator
-from .GAN_Synthesizer import GANSynthesizer
+from DeepCoreML.generators.gan_discriminators import PackedDiscriminator
+from DeepCoreML.generators.gan_generators import Generator
+from DeepCoreML.generators.GAN_Synthesizer import GANSynthesizer
 
 
 class sbGAN(GANSynthesizer):

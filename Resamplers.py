@@ -8,13 +8,13 @@ from imblearn.over_sampling import SVMSMOTE
 from imblearn.over_sampling import KMeansSMOTE
 from imblearn.over_sampling import ADASYN
 
-from generators.c_gan import cGAN
-from generators.sb_gan import sbGAN
-from generators.ct_gan import ctGAN
-from generators.ctd_gan import ctdGAN
-from generators.cbr import CBR
-from generators.ctabgan_synthesizer import CTABGANSynthesizer
-from TabularTransformer import TabularTransformer
+from DeepCoreML.generators.c_gan import cGAN
+from DeepCoreML.generators.sb_gan import sbGAN
+from DeepCoreML.generators.ct_gan import ctGAN
+from DeepCoreML.generators.ctd_gan import ctdGAN
+from DeepCoreML.generators.cbr import CBR
+from DeepCoreML.generators.ctabgan_synthesizer import CTABGANSynthesizer
+from DeepCoreML.TabularTransformer import TabularTransformer
 
 from sdv.single_table import GaussianCopulaSynthesizer
 from sdv.single_table import CTGANSynthesizer

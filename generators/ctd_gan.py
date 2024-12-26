@@ -8,10 +8,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from DeepCoreML.TabularTransformer import TabularTransformer
-from .gan_discriminators import Critic
-from .gan_generators import ctGenerator
-from .GAN_Synthesizer import GANSynthesizer
-from .ctd_clusterer import ctdClusterer
+from DeepCoreML.generators.gan_discriminators import Critic
+from DeepCoreML.generators.gan_generators import ctGenerator
+from DeepCoreML.generators.GAN_Synthesizer import GANSynthesizer
+from DeepCoreML.generators.ctd_clusterer import ctdClusterer
 
 # import DeepCoreML.paths as paths
 

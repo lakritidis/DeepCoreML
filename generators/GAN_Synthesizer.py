@@ -7,7 +7,7 @@ import torch
 
 from sklearn.preprocessing import OneHotEncoder
 
-from .Base_Synthesizer import BaseSynthesizer
+from DeepCoreML.generators.Base_Synthesizer import BaseSynthesizer
 
 
 class GANSynthesizer(BaseSynthesizer):

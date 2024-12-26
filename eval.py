@@ -3,16 +3,16 @@ import time
 import inspect
 from tqdm import tqdm
 
-from generators.sb_gan import sbGAN
-from generators.c_gan import cGAN
-from generators.ct_gan import ctGAN
-from generators.ctd_gan import ctdGAN
+from DeepCoreML.generators.sb_gan import sbGAN
+from DeepCoreML.generators.c_gan import cGAN
+from DeepCoreML.generators.ct_gan import ctGAN
+from DeepCoreML.generators.ctd_gan import ctdGAN
 
-from TabularDataset import TabularDataset
-from Resamplers import TestSynthesizers
-from Tools import set_random_states, get_random_states, reset_random_states
-from ResultHandler import ResultHandler
-from Classifiers import Classifiers
+from DeepCoreML.TabularDataset import TabularDataset
+from DeepCoreML.Resamplers import TestSynthesizers
+from DeepCoreML.Tools import set_random_states, get_random_states, reset_random_states
+from DeepCoreML.ResultHandler import ResultHandler
+from DeepCoreML.Classifiers import Classifiers
 
 from imblearn.pipeline import make_pipeline
 from imblearn.metrics import sensitivity_score, specificity_score

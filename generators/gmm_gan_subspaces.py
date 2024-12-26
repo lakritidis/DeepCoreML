@@ -16,9 +16,9 @@ from sklearn.preprocessing import StandardScaler
 # from sklearn.pipeline import Pipeline
 from sklearn.ensemble import IsolationForest
 
-from .gan_discriminators import PackedDiscriminator
-from .gan_generators import Generator
-from .GAN_Synthesizer import GANSynthesizer
+from DeepCoreML.generators.gan_discriminators import PackedDiscriminator
+from DeepCoreML.generators.gan_generators import Generator
+from DeepCoreML.generators.GAN_Synthesizer import GANSynthesizer
 
 
 class GMMComponent:
