@@ -195,6 +195,8 @@ class TestSynthesizers:
 
             kwargs: extra arguments
         """
+        self._random_state = random_state
+
         disc = (125, 256)
         gen = (256, 256)
         emb_dim = 128
@@ -276,7 +278,7 @@ class TestSynthesizers:
                                       random_state=random_state)
 
         # All over-samplers.
-        self.over_samplers_ = (
+        self.over_samplers_ = [
             # BaseResampler(name="None", model=None, random_state=random_state),
             # BaseResampler(name="ROS", model=ros, random_state=random_state),
             # BaseResampler(name="SMOTE", model=smote, random_state=random_state),
@@ -297,13 +299,36 @@ class TestSynthesizers:
 
             CTResampler("pac10_kmn_stds_probs", model=pac10_kmn_stds_probs, random_state=random_state),
             CTResampler("pac10_kmn_mms_probs", model=pac10_kmn_mms_probs, random_state=random_state),
-        )
+        ]
 
-        self.over_samplers_sdv_ = (
+        self.over_samplers_sdv_ = [
             SDVResampler(name="CTGAN", model=ctgan, random_state=random_state),
             SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
             SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
             SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
-        )
+        ]
 
+        self.num_over_samplers_ = len(self.over_samplers_)
+
+    def clean_over_samplers(self):
+        self.over_samplers_ = []
+        self.num_over_samplers_ = 0
+
+    def add_over_sampler(self, resampler):
+        self.over_samplers_.append(resampler)
+        self.num_over_samplers_ = len(self.over_samplers_)
+
+    def add_base_resampler(self, name, model):
+        resampler = BaseResampler(name=name, model=model, random_state=self._random_state)
+        self.over_samplers_.append(resampler)
+        self.num_over_samplers_ = len(self.over_samplers_)
+
+    def add_sdv_resampler(self, name, model):
+        resampler = SDVResampler(name=name, model=model, random_state=self._random_state)
+        self.over_samplers_.append(resampler)
+        self.num_over_samplers_ = len(self.over_samplers_)
+
+    def add_ct_resampler(self, name, model):
+        resampler = CTResampler(name=name, model=model, random_state=self._random_state)
+        self.over_samplers_.append(resampler)
         self.num_over_samplers_ = len(self.over_samplers_)
