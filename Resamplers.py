@@ -347,10 +347,10 @@ class TestSynthesizers:
             self._add_ct_resampler(name, model)
 
         else:
-            print("The provided mode is not supported. Supported values include:")
-            print("RandomOverSampler, SMOTE, BorderlineSMOTE, SVMSMOTE, KMeansSMOTE, ADASYN, CBR, cGAN, sbGAN,")
-            print("CTGANSynthesizer, TVAESynthesizer, GaussianCopulaSynthesizer, CopulaGANSynthesizer,")
-            print("CTABGANSynthesizer, ctdGAN")
+            print("The provided model object is not supported. The supported model must be one of the following:")
+            print("\tRandomOverSampler, SMOTE, BorderlineSMOTE, SVMSMOTE, KMeansSMOTE, ADASYN, CBR,")
+            print("\tcGAN, sbGAN, CTGANSynthesizer, TVAESynthesizer, GaussianCopulaSynthesizer, ")
+            print("\tCopulaGANSynthesizer, CTABGANSynthesizer, ctdGAN")
 
     def _add_base_resampler(self, name, model):
         resampler = BaseResampler(name=name, model=model, random_state=self._random_state)
