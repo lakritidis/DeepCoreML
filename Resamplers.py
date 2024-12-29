@@ -318,17 +318,51 @@ class TestSynthesizers:
         self.over_samplers_.append(resampler)
         self.num_over_samplers_ = len(self.over_samplers_)
 
-    def add_base_resampler(self, name, model):
+    def add_resampler(self, name, model):
+        """
+        Add a resampler object to self.over_samplers_. In case the provided model does not support the fit_resample
+        method, we extend its functionality by turning it to a BaseResampler, SDVResampler, or CTResampler object.
+
+        Args:
+            name (str): A custom descriptor for the provided model.
+            model (obj): A resampler object. Supported object types include: `RandomOverSampler`, `SMOTE`,
+            `BorderlineSMOTE`, `SVMSMOTE`, `KMeansSMOTE`, `ADASYN`, `CBR`, `cGAN`, `sbGAN`, `CTGANSynthesizer`,
+            `TVAESynthesizer`, `GaussianCopulaSynthesizer`, `CopulaGANSynthesizer`, `CTABGANSynthesizer`, and `ctdGAN`.
+
+        """
+        if (isinstance(model, RandomOverSampler) or isinstance(model, SMOTE) or isinstance(model, BorderlineSMOTE) or
+                isinstance(model, SVMSMOTE) or isinstance(model, KMeansSMOTE) or isinstance(model, ADASYN) or
+                isinstance(model, CBR) or isinstance(model, cGAN) or isinstance(model, sbGAN)):
+
+            self._add_base_resampler(name, model)
+
+        elif (isinstance(model, CTGANSynthesizer) or isinstance(model, TVAESynthesizer) or
+              isinstance(model, GaussianCopulaSynthesizer) or isinstance(model, CopulaGANSynthesizer) or
+              isinstance(model, CTABGANSynthesizer)):
+
+            self._add_sdv_resampler(name, model)
+
+        elif isinstance(model, ctdGAN) or isinstance(model, ctGAN):
+
+            self._add_ct_resampler(name, model)
+
+        else:
+            print("The provided mode is not supported. Supported values include:")
+            print("RandomOverSampler, SMOTE, BorderlineSMOTE, SVMSMOTE, KMeansSMOTE, ADASYN, CBR, cGAN, sbGAN,")
+            print("CTGANSynthesizer, TVAESynthesizer, GaussianCopulaSynthesizer, CopulaGANSynthesizer,")
+            print("CTABGANSynthesizer, ctdGAN")
+
+    def _add_base_resampler(self, name, model):
         resampler = BaseResampler(name=name, model=model, random_state=self._random_state)
         self.over_samplers_.append(resampler)
         self.num_over_samplers_ = len(self.over_samplers_)
 
-    def add_sdv_resampler(self, name, model):
+    def _add_sdv_resampler(self, name, model):
         resampler = SDVResampler(name=name, model=model, random_state=self._random_state)
         self.over_samplers_.append(resampler)
         self.num_over_samplers_ = len(self.over_samplers_)
 
-    def add_ct_resampler(self, name, model):
+    def _add_ct_resampler(self, name, model):
         resampler = CTResampler(name=name, model=model, random_state=self._random_state)
         self.over_samplers_.append(resampler)
         self.num_over_samplers_ = len(self.over_samplers_)
