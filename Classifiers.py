@@ -25,19 +25,19 @@ class Classifiers:
         self.num_classifiers_ = 0
 
         self.models_ = (
-            BaseClassifier("Logistic Regression", "LR",
-                            LogisticRegression(max_iter=300, random_state=random_state)),
-            BaseClassifier("Support Vector Machine", "SVM",
-                           SVC(kernel='rbf', C=1, random_state=random_state)),
-            BaseClassifier("Decision Tree", "DT",
-                           DecisionTreeClassifier(criterion='gini', max_depth=None,
-                                                  max_features=None, random_state=random_state)),
-            BaseClassifier("XGBoost", "XGBoost", xgb.XGBClassifier()),
-            BaseClassifier("Random Forest", "RF",
-                           RandomForestClassifier(n_estimators=50, criterion='gini', max_depth=None,
-                                                  max_features='sqrt', n_jobs=1, random_state=random_state)),
-            BaseClassifier("Multilayer Perceptron", "MLP",
-                           MLPClassifier(activation='relu', hidden_layer_sizes=(128, 128), solver='adam', max_iter=300,
-                                         random_state=random_state))
+            BaseClassifier(name="Logistic Regression", short_name="LR",
+                           model=LogisticRegression(max_iter=300, random_state=random_state)),
+            BaseClassifier(name="Support Vector Machine", short_name="SVM",
+                           model=SVC(kernel='rbf', C=1, random_state=random_state)),
+            BaseClassifier(name="Decision Tree", short_name="DT",
+                           model=DecisionTreeClassifier(criterion='gini', max_depth=None,
+                                                        max_features=None, random_state=random_state)),
+            BaseClassifier(name="XGBoost", short_name="XGBoost", model=xgb.XGBClassifier()),
+            BaseClassifier(name="Random Forest", short_name="RF",
+                           model=RandomForestClassifier(n_estimators=50, criterion='gini', max_depth=None,
+                                                        max_features='sqrt', n_jobs=1, random_state=random_state)),
+            BaseClassifier(name="Multilayer Perceptron", short_name="MLP",
+                           model=MLPClassifier(activation='relu', hidden_layer_sizes=(128, 128), solver='adam',
+                                               max_iter=300, random_state=random_state))
         )
         self.num_classifiers_ = len(self.models_)
