@@ -221,7 +221,7 @@ class TestSynthesizers:
         # SMOTE with Support Vector Machine
         svm_smote = SVMSMOTE(sampling_strategy=sampling_strategy, random_state=random_state)
 
-        # SMOTE-based clustered over-sampler
+        # A SMOTE variant brings balance to clusters identified by k-Means
         # km_smote = KMeansSMOTE(sampling_strategy=sampling_strategy, cluster_balance_threshold='auto',
         #                       random_state=random_state)
 

@@ -40,4 +40,5 @@ class Classifiers:
                            model=MLPClassifier(activation='relu', hidden_layer_sizes=(128, 128), solver='adam',
                                                max_iter=300, random_state=random_state))
         )
+
         self.num_classifiers_ = len(self.models_)
