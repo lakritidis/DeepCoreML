@@ -233,7 +233,7 @@ class CBR:
 
         x_ret = []
         y_ret = []
-        for cluster in tqdm(range(-1, self._n_clusters), desc="   Sampling..."):
+        for cluster in tqdm(range(-1, self._n_clusters), desc="CBR Sampling        "):
             x_cluster_all = x_in[cluster_labels == cluster, :]
             y_cluster_all = y_in[cluster_labels == cluster]
 

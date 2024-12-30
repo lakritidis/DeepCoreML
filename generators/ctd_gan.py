@@ -399,7 +399,7 @@ class ctdGAN(GANSynthesizer):
 
         losses = []
         it = 0
-        for epoch in tqdm(range(self._epochs), desc="   Training..."):
+        for epoch in tqdm(range(self._epochs), desc="ctdGAN Training     "):
             for real_data in train_dataloader:
                 if real_data.shape[0] > 1:
                     disc_loss, gen_loss = self.train_batch(real_data)
@@ -527,7 +527,7 @@ class ctdGAN(GANSynthesizer):
                     num_generated_samples += 1
                     if num_generated_samples > num_samples:
                         return_samples = np.vstack(reconstructed_samples)
-                        print("\t\t\tPerfectly created ", return_samples.shape, "samples from class", y)
+                        # print("\t\t\tPerfectly created ", return_samples.shape, "samples from class", y)
                         return return_samples
                     reconstructed_sample = latent_clusters_objs[s].inverse_transform(z)
                     reconstructed_samples.append(reconstructed_sample)
@@ -546,7 +546,7 @@ class ctdGAN(GANSynthesizer):
                 break
 
         return_samples = np.vstack(reconstructed_samples)
-        print("\t\t\tIncompletely Created ", return_samples.shape, "samples from class", y)
+        # print("\t\t\tIncompletely Created ", return_samples.shape, "samples from class", y)
         return return_samples
 
     def fit_resample(self, x_train, y_train, categorical_columns=()):
@@ -585,7 +585,7 @@ class ctdGAN(GANSynthesizer):
             num_majority_samples = np.max(np.array(self._samples_per_class))
 
             # Perform oversampling
-            for cls in tqdm(range(self._n_classes), desc="   Sampling..."):
+            for cls in tqdm(range(self._n_classes), desc="ctdGAN Sampling     "):
                 if cls != majority_class:
                     samples_to_generate = num_majority_samples - self._samples_per_class[cls]
 
@@ -608,7 +608,7 @@ class ctdGAN(GANSynthesizer):
             # print(majority_samples)
             # print(majority_classes)
 
-            for u in tqdm(range(self._n_clusters), desc="   Sampling..."):
+            for u in tqdm(range(self._n_clusters), desc="ctdGAN Sampling     "):
                 # print("Cluster", u)
                 for cls in range(self._n_classes):
                     ir = imb_matrix[cls][u] / majority_samples[u]
@@ -631,7 +631,7 @@ class ctdGAN(GANSynthesizer):
         # dictionary mode: the keys correspond to the targeted classes. The values correspond to the desired number of
         # samples for each targeted class.
         elif isinstance(self._sampling_strategy, dict):
-            for cls in tqdm(self._sampling_strategy, desc="   Sampling..."):
+            for cls in tqdm(self._sampling_strategy, desc="ctdGAN Sampling     "):
                 # In imblearn sampling strategy stores the class distribution of the output dataset. So we have to
                 # create the half number of samples, and we divide by 2.
                 samples_to_generate = int(self._sampling_strategy[cls] / 2)
@@ -651,7 +651,7 @@ class ctdGAN(GANSynthesizer):
             y_resampled = None
 
             s = 0
-            for cls in tqdm(range(self._n_classes), desc="   Sampling..."):
+            for cls in tqdm(range(self._n_classes), desc="ctdGAN Sampling     "):
                 # Generate as many samples, as the corresponding class cls
                 samples_to_generate = int(self._samples_per_class[cls])
                 generated_samples = self.sample(num_samples=samples_to_generate, y=cls)

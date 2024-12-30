@@ -187,7 +187,7 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                 classifiers = Classifiers(random_state=random_state)
 
                 # For each classifier
-                for classifier in tqdm(classifiers.models_, desc="Classifying..."):
+                for classifier in tqdm(classifiers.models_, desc="Classifying...      "):
                     reset_random_states(np_random_state, torch_random_state, cuda_random_state)
 
                     classifier.fit(x_balanced_scaled, y_balanced)

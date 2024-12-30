@@ -359,7 +359,7 @@ class ctGAN(GANSynthesizer):
         loss_d = loss_g = 0
         c2 = 0
         losses = []
-        for i in tqdm(range(epochs), desc="Training..."):
+        for i in tqdm(range(epochs), desc="ctGAN Training      "):
             for id_ in range(steps_per_epoch):
 
                 for n in range(self._discriminator_steps):
@@ -604,7 +604,7 @@ class ctGAN(GANSynthesizer):
             y_resampled = None
 
             s = 0
-            for cls in tqdm(range(self._n_classes), desc="   Sampling..."):
+            for cls in tqdm(range(self._n_classes), desc="ctGAN Sampling      "):
                 # Generate as many samples, as the corresponding class cls
                 samples_to_generate = int(self._gen_samples_ratio[cls])
                 generated_samples = self.sample(num_samples=samples_to_generate, y=cls)

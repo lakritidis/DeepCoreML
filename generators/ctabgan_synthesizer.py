@@ -438,7 +438,7 @@ class CTABGANSynthesizer:
         ci = 5
 
         steps_per_epoch = max(1, len(train_data) // self.batch_size)
-        for _ in tqdm(range(self.epochs), desc="   Training..."):
+        for _ in tqdm(range(self.epochs), desc="CTABGAN++ Training  "):
             for id_ in range(steps_per_epoch):
 
                 for _ in range(ci):
