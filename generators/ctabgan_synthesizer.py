@@ -612,7 +612,7 @@ class CTABGANSynthesizer:
         num_samples = 0
         num_retries = 0
         generated_samples = []
-        pbar = tqdm(total=requested_samples)
+        pbar = tqdm(total=requested_samples, desc="CTABGAN++ Sampling  ")
         while num_samples < requested_samples:
             generated_data = self.sample(requested_samples)
             num_retries += 1

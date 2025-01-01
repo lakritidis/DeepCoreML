@@ -82,9 +82,9 @@ datasets_problematic = {
 if __name__ == '__main__':
     # eval_methods.test_model('CTDGAN', datasets['ecoli1'], seed)
 
-    # eval_methods.eval_resampling(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
+    eval_methods.eval_resampling(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
     # eval_methods.eval_detectability(datasets=datasets, transformer='standardizer', num_folds=5, random_state=seed)
-    eval_methods.eval_fidelity(datasets=datasets, transformer=None, num_folds=5, random_state=seed)
+    # eval_methods.eval_fidelity(datasets=datasets, transformer=None, num_folds=5, random_state=seed)
 
     # Experiments performed in the Information Sciences 2024 paper
     # eval_methods.eval_oversampling_efficacy(datasets_imb, num_threads, seed)
