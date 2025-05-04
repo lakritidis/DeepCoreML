@@ -301,7 +301,7 @@ class TestSynthesizers:
             SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
             SDVResampler(name="CTABGAN", model=ctabgan, random_state=random_state),
             SDVResampler(name="CTABGAN+", model=ctabgan_plus, random_state=random_state),
-            SDVResampler(name="FCTBGAN", model=fct_gan, random_state=random_state),
+            # SDVResampler(name="FCTBGAN", model=fct_gan, random_state=random_state),
 
             CTResampler("CTD-GAN-KM", model=ctdgan_km, random_state=random_state),
             CTResampler("CTD-GAN-HAC", model=ctdgan_hac, random_state=random_state),
