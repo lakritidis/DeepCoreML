@@ -177,24 +177,23 @@ class ctdClusterer:
 
     It partitions the real space into clusters; then, it transforms the data of each cluster.
     """
-    def __init__(self, cluster_method='kmeans', max_clusters=10, scaler=None, samples_per_class=(), embedding_dim=32,
-                 continuous_columns=(), discrete_columns=(), random_state=0):
+    def __init__(self, cluster_method='kmeans', max_clusters=10, scaler=None, samples_per_class=(),
+                 embedding_dim=32, continuous_columns=(), discrete_columns=(), random_state=0):
         """
         Initializer
 
         Args
             cluster_method (str): The clustering algorithm to apply. Supported values:
-              * kmeans: K-Means
+              * kmeans: K-Means++
               * hac: Hierarchical Agglomerative Clustering
               * gmm: Gaussian Mixture Model
-
             max_clusters (int): The maximum number of clusters to create
             scaler (string): A descriptor that defines a transformation on the cluster's data. Supported values:
-
               * '`None`'  : No transformation takes place; the data is considered immutable
               * '`stds`'  : Standard scaler
               * '`mms01`' : Min-Max scaler in the range (0,1)
               * '`mms11`' : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
+              * '`yeo`':  Yeo-Johnson Power Transformer
             embedding_dim (int): The dimensionality of the latent space (for the probability distribution)
             continuous_columns (tuple): The continuous columns in the input data
             discrete_columns (tuple): The columns in the input data that contain categorical variables
@@ -206,8 +205,8 @@ class ctdClusterer:
             self._cluster_method = 'kmeans'
 
         self._scaler = scaler
-        if scaler not in ['None', 'stds', 'mms01', 'mms11', 'yeo']:
-            self._scaler = 'stds'
+        if scaler not in ('None', 'none', 'stds', 'mms01', 'mms11', 'yeo', 'bins-uni', 'bins-q', 'bins-k', 'bins-bgm'):
+            self._scaler = 'mms11'
 
         self._max_clusters = max_clusters
         self._random_state = random_state
@@ -275,12 +274,10 @@ class ctdClusterer:
                                  clip=True, embedding_dim=self._embedding_dim,
                                  continuous_columns=self._continuous_columns, discrete_columns=self._discrete_columns,
                                  random_state=self._random_state)
-            cluster.fit(x_u, y_u, len(self._samples_per_class))
 
-            # print(x_u)
+            cluster.fit(x_u, y_u, len(self._samples_per_class))
             x_transformed = cluster.transform(x_u)
-            # print(x_transformed)
-            # exit()
+
             cluster_labels = (u * np.ones(y_u.shape[0])).reshape(-1, 1)
             class_labels = np.array(y_u).reshape(-1, 1)
 
@@ -292,7 +289,7 @@ class ctdClusterer:
 
             self.clusters_.append(cluster)
 
-        # Forge the probability matrix; Each element (i,j) stores the conditional probability
+        # Create the probability matrix; Each element (i,j) stores the conditional probability
         # P(cluster==u | class=y) = P( (class==y) AND (cluster==u) ) / P(class==y)
         if num_classes > 1:
             self.probability_matrix_ = np.zeros((num_classes, self.num_clusters_))

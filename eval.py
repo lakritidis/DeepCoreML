@@ -3,11 +3,15 @@ import time
 import inspect
 from tqdm import tqdm
 
+import paths
+
 from DeepCoreML.generators.sb_gan import sbGAN
 from DeepCoreML.generators.c_gan import cGAN
 from DeepCoreML.generators.ct_gan import ctGAN
 from DeepCoreML.generators.ctd_gan import ctdGAN
+from DeepCoreML.generators.ctd_discretizer import ctdDiscretizer
 
+from DeepCoreML.TabularTransformer import TabularTransformer
 from DeepCoreML.TabularDataset import TabularDataset
 from DeepCoreML.Resamplers import TestSynthesizers
 from DeepCoreML.Tools import set_random_states, get_random_states, reset_random_states
@@ -63,6 +67,10 @@ def test_model(model, dataset, seed):
         gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), epochs=epochs, batch_size=batch_size,
                      pac=pac, embedding_dim=128,  max_clusters=20, cluster_method='gmm', scaler='stds',
                      sampling_strategy='balance-clusters', random_state=seed)
+    elif model == "D-CTDGAN":
+        gan = ctdGAN(discriminator=(256, 256), generator=(256, 256), epochs=epochs, batch_size=batch_size,
+                     pac=pac, embedding_dim=128, max_clusters=20, cluster_method='kmeans', scaler='bins-uni',
+                     sampling_strategy='create-new', random_state=seed)
     else:
         print("No model specified")
         exit()
@@ -93,6 +101,10 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
         random_state: Controls random number generation. Set this to a fixed integer to get reproducible results.
 
     """
+    # Truncate the error log
+    open(paths.resampling_path_performance + paths.resampling_filename + "ErrorLog.txt", 'w').close()
+
+    # Initialize the random number generators
     set_random_states(random_state)
     np_random_state, torch_random_state, cuda_random_state = get_random_states()
 
@@ -169,8 +181,19 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                     x_balanced = dataset.x_[train_idx]
                     y_balanced = dataset.y_[train_idx]
                 else:
-                    x_balanced, y_balanced = synthesizer.fit_resample(dataset=dataset, training_set_rows=train_idx,
-                                                                      sampling_strategy='auto')
+                    try:
+                        x_balanced, y_balanced = synthesizer.fit_resample(dataset=dataset, training_set_rows=train_idx,
+                                                                          sampling_strategy='auto')
+                    except (ValueError, RuntimeError) as e:
+                        print("\t\t\t == Exception Caught: '", e, "' ==")
+                        fh = open(paths.resampling_path_performance + paths.resampling_filename + "ErrorLog.txt", "a")
+                        fh.write(" == Exception Caught: '" + str(e) + "' ==\n")
+                        fh.write("\tSynthesizer: " + synthesizer.name_ + "\n")
+                        fh.write("\tDataset: " + dataset.get_name() + "\n")
+                        fh.write("\tFold: " + str(n_fold) + "\n")
+                        fh.write("\tSeed: " + str(random_state) + "\n\n")
+                        fh.close()
+                        continue
 
                 oversampling_duration = time.time() - t_s
 
@@ -211,8 +234,8 @@ def eval_resampling(datasets, num_folds=5, transformer=None, random_state=0):
                     lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                     performance_list.append(lst)
 
-            d_drh = ResultHandler("Resampling/splits/Resampling_" + key + "_seed_" + str(random_state),
-                                  performance_list)
+            d_drh = ResultHandler(description=paths.resampling_filename + key + "_seed_" + str(random_state),
+                                  cv_results=performance_list, out_path=paths.resampling_path_split_files)
             d_drh.record_results()
 
 
@@ -367,8 +390,9 @@ def eval_detectability(datasets, num_folds=5, transformer=None, random_state=0):
                         lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                         performance_list.append(lst)
 
-        d_drh = ResultHandler("Detectability/splits/Detectability_" + key + "_seed_" + str(random_state),
-                              performance_list)
+        d_drh = ResultHandler(description=paths.detectability_filename + key + "_seed_" + str(random_state),
+                              cv_results=performance_list, out_path=paths.detectability_path_split_files)
+
         d_drh.record_results()
 
 
@@ -387,6 +411,7 @@ def eval_fidelity(datasets, num_folds=5, transformer=None, random_state=0):
         transformer (str or None): Determines if/how the balanced data will be normalized.
         random_state: Controls random number generation. Set this to a fixed integer to get reproducible results.
     """
+    open(paths.fidelity_path_performance + paths.fidelity_filename + "ErrorLog.txt", 'w').close()
 
     set_random_states(random_state)
     np_random_state, torch_random_state, cuda_random_state = get_random_states()
@@ -420,7 +445,7 @@ def eval_fidelity(datasets, num_folds=5, transformer=None, random_state=0):
         performance_list = []
 
         print("\n===================================================================================================")
-        print("Classification performance similarity experiment")
+        print("Classification performance similarity (Fidelity) experiment")
         dataset.display_params()
 
         #######################################################################################
@@ -495,8 +520,19 @@ def eval_fidelity(datasets, num_folds=5, transformer=None, random_state=0):
             idx = np.array([i for i in range(dataset.num_rows)])
 
             # Generate synthetic data with the sampler.
-            x_balanced, y_balanced = synthesizer.fit_resample(
-                dataset=dataset, training_set_rows=idx, sampling_strategy='create-new')
+            try:
+                x_balanced, y_balanced = synthesizer.fit_resample(dataset=dataset, training_set_rows=idx,
+                                                                  sampling_strategy='create-new')
+            except (ValueError, RuntimeError) as e:
+                print("\t\t\t == Exception Caught: '", e, "' ==")
+                fh = open(paths.fidelity_path_performance + paths.fidelity_filename + "ErrorLog.txt", "a")
+                fh.write(" == Exception Caught: '" + str(e) + "' ==\n")
+                fh.write("\tSynthesizer: " + synthesizer.name_ + "\n")
+                fh.write("\tDataset: " + dataset.get_name() + "\n")
+                fh.write("\tFold: " + str(n_fold) + "\n")
+                fh.write("\tSeed: " + str(random_state) + "\n\n")
+                fh.close()
+                continue
 
             oversampling_duration = time.time() - t_s
 
@@ -507,6 +543,7 @@ def eval_fidelity(datasets, num_folds=5, transformer=None, random_state=0):
             y_balanced = class_encoder.fit_transform(y_balanced)
 
             for c_train_idx, c_test_idx in skf.split(x_balanced, y_balanced):
+                n_fold += 1
                 x_c_train = x_balanced[c_train_idx]
                 y_c_train = y_balanced[c_train_idx]
 
@@ -549,8 +586,9 @@ def eval_fidelity(datasets, num_folds=5, transformer=None, random_state=0):
                     lst = [key, n_fold, synthesizer.name_, classifier.name_, "Fit Time", oversampling_duration]
                     performance_list.append(lst)
 
-            d_drh = ResultHandler("Fidelity/splits/Fidelity_" + key + "_seed_" + str(random_state),
-                                  performance_list)
+            d_drh = ResultHandler(description=paths.fidelity_filename + key + "_seed_" + str(random_state),
+                                  cv_results=performance_list, out_path=paths.fidelity_path_split_files)
+
             d_drh.record_results()
 
 
@@ -629,9 +667,166 @@ def eval_oversampling_efficacy(datasets, num_threads, random_state):
                     dataset_results_list.append(r[e])
 
         # Record the results for this dataset
-        drh = ResultHandler(key + "_oversampling", dataset_results_list)
+        drh = ResultHandler(description=key + "_oversampling", cv_results=dataset_results_list,
+                            out_path=paths.detectability_path_split_files)
         drh.record_results()
 
     # Record the results for all datasets
-    rh = ResultHandler("oversampling", results_list)
-    rh.record_results()
+    drh = ResultHandler(description="oversampling_seed_" + str(random_state),
+                        cv_results=results_list, out_path=paths.detectability_path_split_files)
+
+    drh.record_results()
+
+
+# Experiments on discretization
+def eval_discretization(datasets, num_folds=5, transformer=None, random_state=0):
+    """
+    The effects of discretization in classification
+
+    Args:
+        datasets (dict): The datasets to be used for evaluation.
+        num_folds (int): The number of cross validation folds.
+        transformer (str or None): Determines if/how the balanced data will be normalized.
+        random_state: Controls random number generation. Set this to a fixed integer to get reproducible results.
+
+    Returns:
+    """
+    # Truncate the error log
+    open(paths.discr_path_performance + "DiscretizationErrorLog.txt", 'w').close()
+
+    # Initialize the random number generators
+    set_random_states(random_state)
+    np_random_state, torch_random_state, cuda_random_state = get_random_states()
+
+    # Determine the evaluation measures to be used - Fit time is not included here.
+    scorers = {
+        'accuracy': accuracy_score,
+        'balanced_accuracy': balanced_accuracy_score,
+        'sensitivity': sensitivity_score,
+        'specificity': specificity_score,
+        'f1': f1_score,
+        'precision': precision_score,
+        'recall': recall_score,
+    }
+
+    # Determine the discretization methods
+    discretization_methods = {
+        # 'Method: None': (None, None, None),
+        # 'Method: ChiMerge - Bins: Auto - Weights: None': ('chi-merge', 'auto-bgm', None),
+        # 'Method: Uniform - Bins: Auto - Weights: None': ('bins-uni', 'auto-bgm', None),
+        # 'Method: Quantile - Bins: Auto - Weights: None': ('bins-q', 'auto-bgm', None),
+        # 'Method: KMeans - Bins: Auto - Weights: None': ('bins-k', 'auto-bgm', None),
+        # 'Method: BGM - Bins: Auto - Weights: None': ('bins-bgm', 'auto-bgm', None),
+        # 'Method: ChiMerge - Bins: 5 - Weights: None': ('chi-merge', 5, None),
+        # 'Method: Uniform - Bins: 5 - Weights: None': ('bins-uni', 5, None),
+        # 'Method: Quantile - Bins: 5 - Weights: None': ('bins-q', 5, None),
+        # 'Method: KMeans - Bins: 5 - Weights: None': ('bins-k', 5, None),
+        # 'Method: BGM - Bins: 5 - Weights: None': ('bins-bgm', 5, None)
+        'Method: CAIM - Bins: None - Weights: None': ('caim', None, None)
+    }
+
+    n_dataset, n_fold = 0, 0
+
+    # For each dataset
+    for key in datasets.keys():
+        reset_random_states(np_random_state, torch_random_state, cuda_random_state)
+        n_dataset += 1
+        # if num_dataset > 1:
+        #     break
+
+        # Load the dataset from the input CSV file
+        ds = datasets[key]
+
+        dataset = TabularDataset(key, class_column=ds['class_col'], categorical_columns=ds['categorical_cols'],
+                                 random_state=random_state)
+        dataset.load_from_csv(path=ds['path'])
+        performance_list = []
+
+        print("\n===================================================================================================")
+        print("Discretization effectiveness experiment")
+        dataset.display_params()
+
+        for d in discretization_methods.keys():
+            d_strategy = discretization_methods[d][0]
+            d_bins = discretization_methods[d][1]
+            d_weights = discretization_methods[d][2]
+
+            print(f"Transforming data with Discretizer: {d_strategy}, Bins: {d_bins}, Weights: {d_weights}")
+
+            # print("Before Discretization:\n", dataset.x_[:20, :])
+            if d_strategy is None:
+                d_name = "[ None, None, None ]"
+
+                ohe = TabularTransformer(cont_normalizer='None', clip=False)
+                ohe.fit(dataset.x_, ds['categorical_cols'])
+                discrete_x = ohe.transform(dataset.x_)
+            else:
+                d_name = "[ " + d_strategy + ", " + str(d_bins) + ", " + str(d_weights) + " ]"
+                discretization_method = ctdDiscretizer(strategy=d_strategy, bins=d_bins, bin_weights=d_weights,
+                                                       random_state=random_state)
+                discretized_x = discretization_method.fit_transform(dataset.x_, dataset.y_, dataset.continuous_columns)
+
+                ohe = TabularTransformer(cont_normalizer='None', clip=False)
+                ohe.fit(discretized_x, [c for c in range(dataset.num_columns)])
+                discrete_x = ohe.transform(discretized_x)
+
+            # print("After Discretization:\n", discrete_x[:20, :])
+
+            # Apply k-fold cross validation
+            skf = StratifiedKFold(n_splits=num_folds, shuffle=False, random_state=None)
+            n_fold = 0
+
+            pbar = tqdm(skf.split(discrete_x, dataset.y_), total=skf.get_n_splits(), desc="Classifying")
+
+            # For each fold
+            for train_idx, test_idx in pbar:
+                # print("\tFold: ", n_fold)
+                n_fold += 1
+                pbar.set_description("Classifying fold %d" % n_fold)
+
+                x_train = discrete_x[train_idx]
+                y_train = dataset.y_[train_idx]
+
+                x_test = discrete_x[test_idx]
+                y_test = dataset.y_[test_idx]
+
+                # Normalize data before feeding it to the classifiers
+                if transformer == 'standardizer':
+                    scaler = StandardScaler()
+                    x_balanced_scaled = scaler.fit_transform(x_train)
+                    x_test_scaled = scaler.transform(x_test)
+                else:
+                    x_balanced_scaled = x_train
+                    x_test_scaled = x_test
+
+                # Initialize a new set of classifiers
+                classifiers = Classifiers(random_state=random_state)
+
+                # For each classifier
+                for classifier in classifiers.models_:
+                    reset_random_states(np_random_state, torch_random_state, cuda_random_state)
+
+                    classifier.fit(x_balanced_scaled, y_train)
+                    y_predict = classifier.predict(x_test_scaled)
+
+                    for scorer in scorers:
+                        # Binary classification evaluation
+                        if dataset.num_classes < 3:
+                            performance = scorers[scorer](y_test, y_predict)
+
+                        # MulTi-class classification evaluation
+                        else:
+                            metric_arguments = inspect.signature(scorers[scorer]).parameters
+                            if 'average' in metric_arguments:
+                                performance = scorers[scorer](y_test, y_predict, average='micro')
+                            else:
+                                performance = scorers[scorer](y_test, y_predict)
+
+                        lst = [key, n_fold, d_name, classifier.name_, scorer, performance]
+                        performance_list.append(lst)
+
+                d_drh = ResultHandler(description=paths.discr_filename + key + "_seed_" + str(random_state),
+                                      cv_results=performance_list, out_path=paths.discr_path_performance)
+                d_drh.record_results()
+
+                pbar.set_description("Completed")

@@ -341,18 +341,17 @@ class ctGAN(GANSynthesizer):
         data_dim = self._transformer.output_dimensions
 
         # CtGAN components: ctGenerator & Critic
-        self.G_ = ctGenerator(self.embedding_dim_ + self._data_sampler.dim_cond_vec(), self.G_Arch_,
+        self.G_ = ctGenerator(self._embedding_dim + self._data_sampler.dim_cond_vec(), self.G_Arch_,
                               data_dim).to(self._device)
 
-        self.D_ = Critic(data_dim + self._data_sampler.dim_cond_vec(), self.D_Arch_,
-                         pac=self.pac_).to(self._device)
+        self.D_ = Critic(data_dim + self._data_sampler.dim_cond_vec(), self.D_Arch_, pac=self._pac).to(self._device)
 
         self.D_optimizer_ = torch.optim.Adam(self.D_.parameters(),
                                              lr=self._disc_lr, weight_decay=self._disc_decay, betas=(0.5, 0.9))
         self.G_optimizer_ = torch.optim.Adam(self.G_.parameters(),
                                              lr=self._gen_lr, weight_decay=self._gen_decay, betas=(0.5, 0.9))
 
-        mean = torch.zeros(self._batch_size, self.embedding_dim_, device=self._device)
+        mean = torch.zeros(self._batch_size, self._embedding_dim, device=self._device)
         std = mean + 1
 
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
@@ -396,7 +395,7 @@ class ctGAN(GANSynthesizer):
                     y_fake = self.D_(fake_cat)
                     y_real = self.D_(real_cat)
 
-                    pen = self.D_.calc_gradient_penalty(real_cat, fake_cat, self._device, self.pac_)
+                    pen = self.D_.calc_gradient_penalty(real_cat, fake_cat, self._device, self._pac)
                     loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
 
                     self.D_optimizer_.zero_grad(set_to_none=False)
@@ -490,7 +489,7 @@ class ctGAN(GANSynthesizer):
         steps = n // self._batch_size + 1
         data = []
         for i in range(steps):
-            mean = torch.zeros(self._batch_size, self.embedding_dim_)
+            mean = torch.zeros(self._batch_size, self._embedding_dim)
             std = mean + 1
             fakez = torch.normal(mean=mean, std=std).to(self._device)
 
@@ -537,6 +536,7 @@ class ctGAN(GANSynthesizer):
         Args:
             x_train: The training data instances.
             y_train: The classes of the training data instances.
+            categorical_columns: A list with the categorical column indices
 
         Returns:
             x_resampled: The training data instances + the generated data instances.

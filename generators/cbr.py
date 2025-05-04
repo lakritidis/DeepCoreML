@@ -171,8 +171,14 @@ class CBR:
         print("Num classes:", self._n_classes)
         print("Global Class Distribution:\n", self.gcd)
 
-    # Compute initial stats
     def _fit(self, x_in, y_in):
+        """
+        Private fit method. It computes several statistics to run CBR.
+
+        Args:
+            x_in: The training data instances.
+            y_in: The classes of the training data instances.
+        """
         self._n_samples = x_in.shape[0]
         self._input_dim = x_in.shape[1]
         self._n_classes = len(set(y_in))
@@ -191,6 +197,16 @@ class CBR:
             self.display_info()
 
     def _perform_clustering(self, x_in):
+        """
+        Private perform_clustering() method. It performs clustering on the training data according to
+        `self._cluster_estimator`.
+
+        Args:
+            x_in: The training data instances.
+
+        Returns:
+            The clustering result.
+        """
         e_dists = euclidean_distances(x_in, x_in)
         med = np.median(e_dists)
         # men = np.mean(e_dists)
@@ -223,9 +239,8 @@ class CBR:
             y_in (1D NumPy array): The classes of the training data instances.
 
         Returns:
-
-            * The training data instances + the generated data instances.
-            * The classes of the training data instances + the classes of the generated data instances.
+            - Training data + generated data instances.
+            - The classes of the training data instances + the classes of the generated data instances.
         """
 
         self._fit(x_in, y_in)

@@ -62,6 +62,7 @@ class TabularDataset(Dataset):
             self.categorical_columns = list(categorical_columns)
             self._label_encoders = [LabelEncoder() for _ in range(len(self.categorical_columns))]
 
+        self.continuous_columns = None
         self._class_encoder = LabelEncoder()
         self.x_ = None
         self.y_ = None
@@ -97,9 +98,10 @@ class TabularDataset(Dataset):
         self.num_rows = num_samples
         self.num_columns = self.dimensionality = x.shape[1]
 
-        # print("Num Samples:", self.num_rows, "\nClass Distribution:")
-        # for k in range(self.num_classes):
-        #    print("\tClass", k, ":", len(y[y == k]), "samples")
+        print("Synthetic dataset created")
+        print("Num Samples:", self.num_rows, "\nClass Distribution:")
+        for k in range(self.num_classes):
+            print("\tClass", k, ":", len(y[y == k]), "samples")
 
     # Load a dataset from an external CSV file
     def load_from_csv(self, path=''):
@@ -152,6 +154,8 @@ class TabularDataset(Dataset):
             for c in range(len(self.categorical_columns)):
                 col = str(self.categorical_columns[c])
                 self.df_[col] = self._label_encoders[c].fit_transform(self.df_[col])
+
+        self.continuous_columns = [c for c in range(self.num_columns - 1) if c not in self.categorical_columns]
 
         # Step 6: Label Encode the class labels (after stripping the whitespace)
         if pd.api.types.is_string_dtype(self.df_[str(self.class_column)].dtype):

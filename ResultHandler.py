@@ -1,14 +1,12 @@
 import pandas as pd
 
-import DeepCoreML.paths as paths
-
 
 class ResultHandler:
-    def __init__(self, description, cv_results):
+    def __init__(self, description, cv_results, out_path):
         self.description_ = description
         self.cv_results = cv_results
         self.mean_results = []
-        self._out_path = paths.output_path_performance
+        self._out_path = out_path
 
     def to_df(self, result_type='folds'):
         # df_columns = ['Classifier', 'Sampler', 'Dataset',
@@ -65,4 +63,6 @@ class ResultHandler:
 
         # Results in CSV format
         results = self.to_df().sort_values(by=['Dataset', 'Sampler', 'Scorer', 'Fold'])
+        # print("self._out_path=", self._out_path)
+        # print("self._description=", self.description_)
         results.to_csv(self._out_path + self.description_ + '.csv')

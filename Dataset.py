@@ -14,3 +14,6 @@ class Dataset:
 
         self.class_column = class_column
         self.num_classes = 0
+
+    def get_name(self):
+        return self._name

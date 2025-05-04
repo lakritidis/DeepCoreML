@@ -12,25 +12,24 @@ from DeepCoreML.generators.gan_discriminators import Critic
 from DeepCoreML.generators.gan_generators import ctGenerator
 from DeepCoreML.generators.GAN_Synthesizer import GANSynthesizer
 from DeepCoreML.generators.ctd_clusterer import ctdClusterer
+from DeepCoreML.generators.ctd_discretizer import ctdDiscretizer
 
 # import DeepCoreML.paths as paths
 
 
-class ctdGAN(GANSynthesizer):
-    """
-    ctdGAN implementation
+class ctdGANDiscretizer(GANSynthesizer):
+    """ctdGAN implementation
+
 
     ctdGAN conditionally generates tabular data with the aim of confronting class imbalance. The model uses both
     cluster and class labels for training. It applies a cluster-aware data transformation mechanism and introduces
     a loss function that penalizes the generation of samples with incorrect cluster and class labels. New data
     instances are generated via a probabilistic sampling strategy.
     """
-
     def __init__(self, discriminator=(128, 128), generator=(256, 256), embedding_dim=128, epochs=300, batch_size=32,
-                 pac=1, lr=2e-4, decay=1e-6, sampling_strategy='auto',
-                 scaler='stds', cluster_method='kmeans', max_clusters=20, random_state=0):
-        """
-        ctdGAN initializer
+                 pac=1, lr=2e-4, decay=1e-6, sampling_strategy='auto', 
+                 scaler='stds', bins='auto', cluster_method='kmeans', max_clusters=20, random_state=0):
+        """ctdGAN initializer
 
         Args:
             discriminator (tuple): a tuple with number of neurons for each fully connected layer of the model's Critic.
@@ -40,22 +39,36 @@ class ctdGAN(GANSynthesizer):
             embedding_dim (int): Size of the normally distributed latent vector passed to the Generator.
             epochs (int): The number of training epochs.
             batch_size (int): The number of data instances per training batch. Must be α multiple of `pac`.
-            scaler (string): A descriptor that defines a transformation on the cluster's data. Values:
-
-              * '`None`'  : No transformation takes place; the data is considered immutable
-              * '`stds`'  : Standard scaler
-              * '`mms01`' : Min-Max scaler in the range (0,1)
-              * '`mms11`' : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
-              * '`yeo`':  Yeo-Johnson Power Transformer
             pac (int): The number of samples to group together as input to the Critic.
             lr (real): The value of the learning rate parameter for the Generator/Critic Adam optimizers.
             decay (real): The value of the weight decay parameter for the Generator/Critic Adam optimizers.
-            sampling_strategy (string or dictionary): How the model generates samples:
+            sampling_strategy (string or dictionary): Only used in `fit_resample` for compatibility purposes with
+                the `imbalanced-learn` library. It determines how the model brings balance to a dataset:
 
                 - 'auto': balance the dataset by oversampling the minority classes.
                 - 'balance-clusters': balance the dataset by balancing its clusters.
                 - 'create-new': create a new dataset with the same class distribution as the one that was trained with.
                 - dict: a dictionary that indicates the number of samples to be generated from each class
+
+            scaler (str): A descriptor that defines a transformation on the cluster's data. Values:
+
+              * '`None`'     : No transformation takes place; the data is considered immutable
+              * '`stds`'     : Standard scaler
+              * '`mms01`'    : Min-Max scaler in the range (0,1)
+              * '`mms11`'    : Min-Max scaler in the range (-1,1) - so that data is suitable for tanh activations
+              * '`yeo`'      :  Yeo-Johnson Power Transformer
+              * '`bins-uni`' :  Discretize the continuous variables uniformly (bins of equal widths)
+              * '`bins-q`'   :  Discretize the continuous variables with equal quantile (bins of same populations)
+              * '`bins-k`'   :  Discretize the continuous variables with k-means clustering (values in each bin have
+                                the same nearest center of a 1D k-means cluster)
+              * '`bins-bgm`' :  Discretize the continuous variables with clustering based on Bayesian Gaussian Mixtures
+
+            bins (str, int): The number of bins used to discretize the continuous variables.
+            cluster_method (str): Determines the algorithm that will be used in the initial clustering steps. Values:
+              * kmeans: K-Means++
+              * hac: Hierarchical Agglomerative Clustering
+              * gmm: Gaussian Mixture Model
+
             max_clusters (int): The maximum number of clusters to create.
             random_state (int): Seed the random number generators. Use the same value for reproducible results.
         """
@@ -63,10 +76,15 @@ class ctdGAN(GANSynthesizer):
                          lr, lr, decay, decay, sampling_strategy, random_state)
 
         self._cluster_method = cluster_method
-        if scaler not in ('None', 'none', 'stds', 'mms01', 'mms11', 'yeo'):
+        if scaler not in ('None', 'none', 'stds', 'mms01', 'mms11', 'yeo', 'bins-uni', 'bins-q', 'bins-k', 'bins-bgm'):
             self._scaler = 'mms11'
         else:
             self._scaler = scaler
+
+        # Discretization bins: Used only when scaler is in ('bins-w', 'bins-f')
+        # _discretizer transforms the continuous variables to discrete ones when self._scaler = 'bins'
+        self._discretizer = None
+        self._bins = bins
 
         # clustered_transformer performs clustering and data transformation.
         self._clustered_transformer = None
@@ -76,7 +94,12 @@ class ctdGAN(GANSynthesizer):
 
         self._max_clusters = max_clusters
         self._n_clusters = 0
+
+        # The categorical_columns list stores the real categorical columns of the dataset, as they are passed from the
+        # user. On the other hand, discrete_columns stores the categorical columns + the continuous columns that have
+        # been converted to categorical ones.
         self._categorical_columns = []
+        self._discrete_columns = []
 
     @staticmethod
     def _gumbel_softmax(logits, tau=1.0, hard=False, eps=1e-10, dim=-1):
@@ -103,7 +126,9 @@ class ctdGAN(GANSynthesizer):
         raise ValueError('gumbel_softmax returning NaN.')
 
     def _apply_activate(self, data):
-        """Apply proper activation function to the output of the generator."""
+        """
+        Apply proper activation function to the output of the generator.
+        """
         data_t = []
         st = 0
         for column_info in self._discrete_transformer.output_info_list:
@@ -114,7 +139,6 @@ class ctdGAN(GANSynthesizer):
                     st = ed
                 elif span_info.activation_fn == 'softmax':
                     ed = st + span_info.dim
-                    # transformed = torch.softmax(data[:, st:ed], dim=1)
                     transformed = self._gumbel_softmax(data[:, st:ed], tau=0.2)
                     data_t.append(transformed)
                     st = ed
@@ -136,6 +160,8 @@ class ctdGAN(GANSynthesizer):
             A tensor with the preprocessed data.
         """
         self._categorical_columns = list(categorical_columns)
+        self._discrete_columns = list(categorical_columns)
+
         self._n_classes = len(set(y_train))
         self._input_dim = x_train.shape[1]
         continuous_columns = [c for c in range(self._input_dim) if c not in self._categorical_columns]
@@ -144,24 +170,31 @@ class ctdGAN(GANSynthesizer):
         # ====== ii) performs data transformations (scaling, PCA, outlier detection, etc.)
         self._samples_per_class = np.unique(y_train, return_counts=True)[1]
 
+        # If the scaler includes a discretization method, then ctdClusterer will suppress it and consider it None
         self._clustered_transformer = ctdClusterer(cluster_method=self._cluster_method, max_clusters=self._max_clusters,
                                                    scaler=self._scaler,
                                                    samples_per_class=self._samples_per_class,
                                                    continuous_columns=tuple(continuous_columns),
                                                    discrete_columns=tuple(self._categorical_columns),
                                                    embedding_dim=self._embedding_dim, random_state=self._random_state)
-
         train_data = self._clustered_transformer.perform_clustering(x_train, y_train, self._n_classes, self._pac)
 
+        # If the scaler is NOT a discretization method, then ctdDiscretizer will suppress it and consider it None
+        if self._scaler in ('bins-uni', 'bins-q', 'bins-k', 'bins-bgm'):
+            self._discretizer = ctdDiscretizer(strategy=self._scaler, bins=self._bins, random_state=self._random_state)
+            self._discretizer.fit_transform(train_data, continuous_columns)
+            self._discrete_columns = [c for c in range(self._input_dim)]
+
+        # The number of clusters
         self._n_clusters = self._clustered_transformer.num_clusters_
 
         # ====== Append the cluster and class labels to the collection of discrete columns
-        self._categorical_columns.append(self._input_dim)
-        self._categorical_columns.append(self._input_dim + 1)
+        self._discrete_columns.append(self._input_dim)
+        self._discrete_columns.append(self._input_dim + 1)
 
         # ====== Transform the discrete columns only; the continuous columns have been scaled at cluster-level.
         self._discrete_transformer = TabularTransformer(cont_normalizer='None', clip=False)
-        self._discrete_transformer.fit(train_data, self._categorical_columns)
+        self._discrete_transformer.fit(train_data, self._discrete_columns)
 
         ret_data = self._discrete_transformer.transform(train_data)
 
@@ -266,8 +299,8 @@ class ctdGAN(GANSynthesizer):
 
                     # Penalize mis-classifications more heavily
                     elif st_idx == class_st_idx and ed_idx == class_ed_idx:
-                        # self._categorical_columns = 1 + number of discrete columns (2 is from the class + cluster col)
-                        # gamma = len(self._categorical_columns) - 1
+                        # self._discrete_columns = 1 + number of discrete columns (2 is from the class + cluster col)
+                        # gamma = len(self._discrete_columns) - 1
                         gamma = 1.0
 
                         if self._n_classes == 2:
@@ -370,7 +403,7 @@ class ctdGAN(GANSynthesizer):
         Args:
             x_train (NumPy array): The training data instances.
             y_train (NumPy array): The classes of the training data instances.
-            categorical_columns: The columns to be considered as categorical
+            categorical_columns: The columns to be considered as categorical.
             store_losses: The file path where the values of the Discriminator and Generator loss functions are stored.
         """
 

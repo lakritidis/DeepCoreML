@@ -13,7 +13,9 @@ from DeepCoreML.generators.sb_gan import sbGAN
 from DeepCoreML.generators.ct_gan import ctGAN
 from DeepCoreML.generators.ctd_gan import ctdGAN
 from DeepCoreML.generators.cbr import CBR
+from DeepCoreML.generators.ctabganplus_synthesizer import CTABGANPlusSynthesizer
 from DeepCoreML.generators.ctabgan_synthesizer import CTABGANSynthesizer
+from DeepCoreML.generators.fctgan_synthesizer import FCTGANSynthesizer
 from DeepCoreML.TabularTransformer import TabularTransformer
 
 from sdv.single_table import GaussianCopulaSynthesizer
@@ -195,7 +197,7 @@ class TestSynthesizers:
         """
         self._random_state = random_state
 
-        disc = (125, 256)
+        disc = (128, 256)
         gen = (256, 256)
         emb_dim = 128
         knn = 10
@@ -222,8 +224,8 @@ class TestSynthesizers:
         svm_smote = SVMSMOTE(sampling_strategy=sampling_strategy, random_state=random_state)
 
         # A SMOTE variant brings balance to clusters identified by k-Means
-        # km_smote = KMeansSMOTE(sampling_strategy=sampling_strategy, cluster_balance_threshold='auto',
-        #                       random_state=random_state)
+        km_smote = KMeansSMOTE(sampling_strategy=sampling_strategy, cluster_balance_threshold='auto',
+                               random_state=random_state)
 
         # Adaptive Synthetic Sampling (ADASYN)
         adasyn = ADASYN(sampling_strategy=sampling_strategy, random_state=random_state)
@@ -261,8 +263,14 @@ class TestSynthesizers:
         cop_gan = CopulaGANSynthesizer(metadata, enforce_min_max_values=False, enforce_rounding=False, epochs=epochs,
                                        verbose=False)
 
+        # CTABGAN
+        ctabgan = CTABGANSynthesizer(metadata, epochs=150, random_state=random_state)
+
         # CTABGAN+
-        ctabgan_plus = CTABGANSynthesizer(metadata, epochs=150, random_state=random_state)
+        ctabgan_plus = CTABGANPlusSynthesizer(metadata, epochs=150, random_state=random_state)
+
+        # FCTGAN
+        fct_gan = FCTGANSynthesizer(metadata, epochs=150, random_state=random_state)
 
         # CTD Generative Adversarial Network (ctdGAN)
         ctdgan_km = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
@@ -270,9 +278,8 @@ class TestSynthesizers:
                            cluster_method='kmeans', sampling_strategy=sampling_strategy, random_state=random_state)
 
         ctdgan_hac = ctdGAN(embedding_dim=emb_dim, discriminator=disc, generator=gen, epochs=epochs,
-                            batch_size=batch_size, max_clusters=max_clusters, pac=10, scaler='stds',
-                            cluster_method='hac', sampling_strategy=sampling_strategy,
-                            random_state=random_state)
+                            batch_size=batch_size, max_clusters=max_clusters, pac=10, scaler='mms11',
+                            cluster_method='hac', sampling_strategy=sampling_strategy, random_state=random_state)
 
         # All over-samplers.
         self.over_samplers_ = [
@@ -281,7 +288,7 @@ class TestSynthesizers:
             BaseResampler(name="SMOTE", model=smote, random_state=random_state),
             BaseResampler(name="BorderSMOTE", model=b_smote, random_state=random_state),
             BaseResampler(name="SVM-SMOTE", model=svm_smote, random_state=random_state),
-            # BaseResampler(name="KMeans SMOTE", model=km_smote, random_state=random_state),
+            BaseResampler(name="KMeans SMOTE", model=km_smote, random_state=random_state),
             BaseResampler(name="ADASYN", model=adasyn, random_state=random_state),
             BaseResampler(name="CBR", model=cbr, random_state=random_state),
             # CTResampler("ctGAN", model=ctgan_1, random_state=random_state),
@@ -292,7 +299,9 @@ class TestSynthesizers:
             SDVResampler(name="TVAE", model=t_vae, random_state=random_state),
             SDVResampler(name="GCOP", model=g_cop, random_state=random_state),
             SDVResampler(name="COP-GAN", model=cop_gan, random_state=random_state),
-            SDVResampler(name="CTAB-GAN", model=ctabgan_plus, random_state=random_state),
+            SDVResampler(name="CTABGAN", model=ctabgan, random_state=random_state),
+            SDVResampler(name="CTABGAN+", model=ctabgan_plus, random_state=random_state),
+            SDVResampler(name="FCTBGAN", model=fct_gan, random_state=random_state),
 
             CTResampler("CTD-GAN-KM", model=ctdgan_km, random_state=random_state),
             CTResampler("CTD-GAN-HAC", model=ctdgan_hac, random_state=random_state),
@@ -335,7 +344,7 @@ class TestSynthesizers:
 
         elif (isinstance(model, CTGANSynthesizer) or isinstance(model, TVAESynthesizer) or
               isinstance(model, GaussianCopulaSynthesizer) or isinstance(model, CopulaGANSynthesizer) or
-              isinstance(model, CTABGANSynthesizer)):
+              isinstance(model, CTABGANPlusSynthesizer) or isinstance(model, CTABGANSynthesizer)):
 
             self._add_sdv_resampler(name, model)
 
